@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>修仙模拟器</title>
+<!-- 手机「添加到主屏幕」后全屏启动，不带浏览器地址栏 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="修仙">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0b0a">
+<style>
+:root {
+  --ink: #0d0b0a;
+  --ink-2: #17130f;
+  --gold: #c9a227;
+  --gold-dim: #8a7020;
+  --paper: #d9cdb4;
+  --text: #cfc4ad;
+  --danger: #a8322a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: "Songti SC", "STSong", serif;
+  /* 宣纸横纹压在墨色晕开的底子上。两层顺序不能颠倒——
+     径向渐变两端都不透明，放在上层会把纹理整个盖掉。 */
+  background-color: var(--ink);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at 50% 0%, #1b1611 0%, var(--ink) 60%);
+  background-attachment: fixed;
+}
+#app { max-width: 960px; margin: 0 auto; padding: 16px; }
+#top-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
+  border-bottom: 1px solid var(--gold-dim); padding-bottom: 8px;
+}
+#luck-text { color: var(--gold-dim); }
+#body { display: grid; grid-template-columns: 200px 1fr 200px; gap: 16px; margin: 16px 0; }
+.panel { border: 1px solid var(--gold-dim); padding: 10px; margin-bottom: 12px; background: var(--ink-2); }
+/* 无状态时 #debuff-panel 的 innerHTML 为空，不隐藏会剩一个空框 */
+.panel:empty { display: none; }
+.panel-title { color: var(--gold); letter-spacing: 4px; margin-bottom: 6px; }
+.panel-desc { font-size: 12px; opacity: 0.7; margin: 4px 0 8px; }
+.tag { display: inline-block; border: 1px solid var(--gold-dim); padding: 2px 8px; margin: 2px 0; color: var(--gold); }
+.tag.danger { border-color: var(--danger); color: var(--danger); }
+.bar { height: 6px; background: #241d16; border: 1px solid var(--gold-dim); flex: 1; min-width: 120px; }
+.fill { height: 100%; background: var(--gold); transition: width 120ms linear; }
+#life-bar.urgent .fill { background: var(--danger); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+#stage { text-align: center; padding: 24px 0; }
+
+/* ===== 修为圆环 ===== */
+/* 圆环内是绝对定位的浮层：SVG 走文档流撑出 260px 高度，
+   数字压在环内上半部，打坐者占下半部，两者互不遮挡；
+   #overflow-text 留在文档流里，自然落到环下方。 */
+#cult-ring { position: relative; width: 260px; margin: 0 auto; }
+#ring-svg { display: block; width: 260px; height: 260px; overflow: visible; }
+.ring-track { fill: none; stroke: #2a2118; stroke-width: 6; }
+.ring-fill {
+  fill: none; stroke: var(--gold); stroke-width: 6; stroke-linecap: round;
+  /* 转 -90° 让进度从正上方起笔、顺时针推进。SVG 元素上必须写死
+     transform-box，否则各浏览器对 transform-origin 参照系的解释不一致。 */
+  transform: rotate(-90deg); transform-box: view-box; transform-origin: 110px 110px;
+  transition: stroke-dashoffset 140ms linear;
+  filter: drop-shadow(0 0 6px rgba(201,162,39,0.6));
+}
+.ring-aura {
+  fill: none; stroke: rgba(201,162,39,0.22); stroke-width: 1;
+  /* 周长 2π×86 ≈ 540.35，虚线周期取 14.22 恰好排满 38 段，转起来没有接缝 */
+  stroke-dasharray: 4 10.22;
+  animation: spin 12s linear infinite;
+  transform-box: view-box; transform-origin: 110px 110px;
+}
+.ring-aura.overflowing {
+  stroke: rgba(201,162,39,0.75); stroke-width: 1.5; animation-duration: 3s;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.fig { fill: var(--gold-dim); stroke: var(--ink); stroke-width: 1.6; }
+.arm { fill: none; stroke: var(--gold-dim); stroke-width: 6; stroke-linecap: round; }
+.arm-gap { fill: none; stroke: var(--ink); stroke-width: 10; stroke-linecap: round; }
+#meditator { animation: breathe 4s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: 0.5; } }
+#cult-text {
+  position: absolute; left: 0; right: 0; top: 52px;
+  font-size: 24px; line-height: 1.4; color: var(--gold); letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(201,162,39,0.35);
+}
+#rate-text {
+  position: absolute; left: 0; right: 0; top: 88px;
+  font-size: 12px; line-height: 1.4; opacity: 0.6; font-variant-numeric: tabular-nums;
+}
+/* 留出固定高度，溢出提示出现/消失时突破按钮不会跳动 */
+#overflow-text {
+  font-size: 12px; line-height: 1.4; min-height: 17px; margin-top: 6px;
+  color: var(--gold); letter-spacing: 1px;
+}
+#breakthrough-btn {
+  margin-top: 20px; padding: 10px 32px; font-size: 16px; font-family: inherit;
+  background: transparent; color: var(--gold-dim); border: 1px solid var(--gold-dim); cursor: not-allowed;
+}
+#breakthrough-btn.ready {
+  color: var(--gold); border-color: var(--gold); cursor: pointer;
+  box-shadow: 0 0 12px rgba(201,162,39,0.5); animation: pulse 1.6s infinite;
+}
+#log-panel { height: 160px; overflow-y: auto; border-top: 1px solid var(--gold-dim); padding-top: 8px; font-size: 13px; }
+.log-line { margin: 3px 0; }
+.log-age { color: var(--gold-dim); margin-right: 8px; }
+
+.modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.modal { width: min(480px, 88vw); background: var(--ink-2); border: 1px solid var(--gold); padding: 24px; }
+.modal-title { color: var(--gold); font-size: 20px; letter-spacing: 6px; text-align: center; margin-bottom: 16px; }
+.modal-body { line-height: 1.9; margin-bottom: 20px; }
+.event-text { text-indent: 2em; margin: 0; }
+.modal-actions { display: flex; flex-direction: column; gap: 8px; }
+.modal-btn { padding: 10px; font-family: inherit; font-size: 14px; background: transparent; color: var(--text); border: 1px solid var(--gold-dim); cursor: pointer; }
+.modal-btn:hover { color: var(--gold); border-color: var(--gold); background: rgba(201,162,39,0.08); }
+
+#upgrade-box { margin-top: 16px; border-top: 1px solid var(--gold-dim); padding-top: 12px; }
+/* 三列定宽而非 space-between：否则每行等级、价格会随左侧名字长短各自错位 */
+.upgrade-row { display: grid; grid-template-columns: 1fr auto 56px; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+.upgrade-row small { opacity: 0.6; margin-left: 6px; }
+.upgrade-btn { min-width: 48px; padding: 3px 8px; font-family: inherit; background: transparent; color: var(--gold); border: 1px solid var(--gold-dim); cursor: pointer; }
+.upgrade-btn:disabled { color: var(--gold-dim); cursor: not-allowed; }
+
+@media (max-width: 720px) {
+  /* 全屏启动时内容会延伸到刘海与底部横条下面，用安全区把顶栏顶回来 */
+  #app {
+    padding: calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right))
+             calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+  }
+  #top-bar { font-size: 14px; gap: 4px 12px; }
+
+  /* 手机上重排整页顺序：圆环 → 突破 → 日志 → 参考面板。
+     日志是事件结果与晋级反馈的唯一出口，塌成一栏后若仍排在
+     灵根/天赋/功法/神通之后，它会落到 1000px 开外的位置，
+     每看一条都要长划。参考面板才是偶尔查一次的东西，放最后。
+     #body 用 display:contents 摊平，让它的子元素直接参与 #app 的排序。 */
+  #app { display: flex; flex-direction: column; }
+  #body { display: contents; }
+  #top-bar   { order: 0; }
+  #stage     { order: 1; padding: 12px 0 4px; }
+  #log-panel { order: 2; margin-bottom: 16px; }
+  #left-col  { order: 3; }
+  #right-col { order: 4; }
+
+  /* iOS 建议触摸目标不小于 44px，弹窗按钮是全局最需要点准的地方 */
+  .modal-btn { padding: 14px 10px; font-size: 15px; }
+  #breakthrough-btn { padding: 14px 32px; }
+}
+
+/* 关掉双击缩放与 300ms 点击延迟，手机上连点会被识别成缩放手势 */
+button, .modal-btn, .upgrade-btn { touch-action: manipulation; }
+
+/* 调试面板：随生产构建发布，按 ~ 开关。刻意用扎眼的终端绿，与水墨主题划清界限 */
+#debug-panel {
+  position: fixed; right: 12px; bottom: 12px; z-index: 20;
+  background: #000; border: 1px solid #3a5; color: #6c9; padding: 12px;
+  font-family: ui-monospace, monospace; font-size: 12px; max-width: 300px;
+}
+#debug-panel button { display: block; width: 100%; margin: 4px 0; font-family: inherit; background: #111; color: #6c9; border: 1px solid #3a5; cursor: pointer; padding: 4px; }
+#debug-panel input { width: 70px; background: #111; color: #6c9; border: 1px solid #3a5; }
+.debug-title { color: #3a5; margin-bottom: 8px; }
+#debug-stats { margin-top: 8px; line-height: 1.6; word-break: break-all; }
+
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top-bar">
+    <span id="dao-hao">无名散修</span>
+    <span id="realm-name">练气 · 初期</span>
+    <div id="life-bar" class="bar"><div id="life-fill" class="fill"></div></div>
+    <span id="age-text">16 / 120 载</span>
+    <span id="luck-text">气运 0</span>
+  </header>
+
+  <div id="body">
+    <aside id="left-col">
+      <section id="spirit-panel" class="panel"></section>
+      <section id="talent-panel" class="panel"></section>
+    </aside>
+
+    <main id="stage">
+      <div id="cult-ring">
+        <svg viewBox="0 0 220 220" id="ring-svg" aria-hidden="true">
+          <circle cx="110" cy="110" r="96" class="ring-track"/>
+          <circle cx="110" cy="110" r="96" class="ring-fill" id="ring-fill"/>
+          <circle cx="110" cy="110" r="86" class="ring-aura" id="ring-aura"/>
+          <!-- 打坐剪影。这个尺寸下能读出「人」全靠三处对比：细长的颈、
+               直筒不外扩的躯干、明显宽于躯干的盘膝。双臂先描一道底色粗线再压金线，
+               臂与躯干之间才会留出空隙——没有这道空隙，整个人就是一口钟。 -->
+          <g id="meditator" transform="translate(110,157) scale(1.15)">
+            <path class="fig" d="M5,-38 L5,-28 C12,-27 17,-24 17,-17 L18,6 L-18,6 L-17,-17 C-17,-24 -12,-27 -5,-28 L-5,-38 Z"/>
+            <path class="arm-gap" d="M15,-21 Q40,-5 4,7"/>
+            <path class="arm-gap" d="M-15,-21 Q-40,-5 -4,7"/>
+            <path class="arm" d="M15,-21 Q40,-5 4,7"/>
+            <path class="arm" d="M-15,-21 Q-40,-5 -4,7"/>
+            <path class="fig" d="M-36,10 Q-30,-6 0,0 Q30,-6 36,10 Q0,26 -36,10 Z"/>
+            <circle cx="0" cy="-42" r="9.5" class="fig"/>
+          </g>
+        </svg>
+        <div id="cult-text">0 / 100</div>
+        <div id="rate-text"></div>
+        <div id="overflow-text"></div>
+      </div>
+      <button id="breakthrough-btn" disabled>修为未足</button>
+    </main>
+
+    <aside id="right-col">
+      <section id="gongfa-panel" class="panel"></section>
+      <section id="shentong-panel" class="panel"></section>
+      <section id="debuff-panel" class="panel"></section>
+    </aside>
+  </div>
+
+  <footer id="log-panel"></footer>
+</div>
+<div id="debug-panel" hidden>
+  <div class="debug-title">调试面板（~ 开关）</div>
+  <label>时间倍速 <input id="debug-speed" type="number" value="1" min="1" max="1000" step="10"></label>
+  <button id="debug-fill">修为填满</button>
+  <button id="debug-event">立刻触发事件</button>
+  <button id="debug-realm">境界 +1</button>
+  <button id="debug-age">寿元 −80%</button>
+  <button id="debug-reset">清档重来</button>
+  <div id="debug-stats"></div>
+</div>
+<div id="modal-root"></div>
+<script>
+// ===== data/realms.js =====
+// 九大境界 + 飞升。life 为该境界寿元上限（岁），chance 为突破到下一境界的基础成功率
+const REALMS = [
+  { name: '练气', life: 120,   chance: 0.90 },
+  { name: '筑基', life: 300,   chance: 0.75 },
+  { name: '金丹', life: 600,   chance: 0.60 },
+  { name: '元婴', life: 1200,  chance: 0.50 },
+  { name: '化神', life: 2200,  chance: 0.42 },
+  { name: '炼虚', life: 4000,  chance: 0.35 },
+  { name: '合体', life: 7000,  chance: 0.28 },
+  { name: '大乘', life: 12000, chance: 0.22 },
+  { name: '渡劫', life: 22000, chance: 0.15 },
+  { name: '飞升', life: Infinity, chance: 0 },
+];
+
+const SUB_NAMES = ['初期', '中期', '后期', '圆满'];
+
+// 修为曲线常量，改动前先跑 tests/balance.test.mjs
+const REQ_BASE = 100;
+const REQ_GROWTH = 1.55;
+const RATE_BASE = 8.33;
+const RATE_GROWTH = 1.348;
+
+const START_AGE = 16;
+const ASCEND_REALM = 9;
+
+
+// ===== data/spirits.js =====
+const ELEMENTS = ['金', '木', '水', '火', '土'];
+const MUTANT_ELEMENTS = ['雷', '冰', '风'];
+
+// weight 之和必须为 100
+const SPIRITS = [
+  { id: 'tian',   name: '天灵根',   weight: 1,  count: 1, mutant: false, mult: 3.0,  breakAdd: 0,    lifeAdd: 0,   desc: '万中无一，大道可期' },
+  { id: 'mutant', name: '变异灵根', weight: 5,  count: 1, mutant: true,  mult: 2.2,  breakAdd: 0.10, lifeAdd: 0,   desc: '天生异种，渡劫易成' },
+  { id: 'shuang', name: '双灵根',   weight: 14, count: 2, mutant: false, mult: 1.6,  breakAdd: 0,    lifeAdd: 0,   desc: '资质上佳' },
+  { id: 'san',    name: '三灵根',   weight: 25, count: 3, mutant: false, mult: 1.25, breakAdd: 0,    lifeAdd: 0,   desc: '资质中平' },
+  { id: 'si',     name: '四灵根',   weight: 30, count: 4, mutant: false, mult: 1.0,  breakAdd: 0,    lifeAdd: 0,   desc: '寻常之姿' },
+  { id: 'wu',     name: '五灵根',   weight: 25, count: 5, mutant: false, mult: 0.7,  breakAdd: 0,    lifeAdd: 0.20, desc: '伪灵根，修行缓慢，然根基绵长' },
+];
+
+
+// ===== data/talents.js =====
+// 开局抽 1~2 个（30% 概率抽到 2 个），同局不重复
+const TALENTS = [
+  { id: 'guomubuwang', name: '过目不忘', desc: '功法效果 +50%',                     gongfaAmp: 1.5 },
+  { id: 'tianshengdaoti', name: '天生道体', desc: '突破成功率加成 +15%',            breakAdd: 0.15 },
+  { id: 'changshengzhong', name: '长生种', desc: '寿元上限 +30%',                   lifeAdd: 0.30 },
+  { id: 'qiyunzhizi', name: '气运之子', desc: '事件触发间隔 −40%',                  intervalAdd: -0.40 },
+  { id: 'xinmochanshen', name: '心魔缠身', desc: '修炼 +40%，突破成功率加成 −10%',  rateAdd: 0.40, breakAdd: -0.10 },
+  { id: 'sanxiuchushen', name: '散修出身', desc: '机缘收益与劫难损失 +25%，修炼 −15%', fortuneAdd: 0.25, rateAdd: -0.15 },
+  { id: 'daqiwancheng', name: '大器晚成', desc: '化神前修炼 −20%，化神后 +60%',      lateBloomer: true },
+  { id: 'fuyuanshenhou', name: '福缘深厚', desc: '机缘事件出现权重翻倍',            luckyWeight: 2 },
+];
+
+
+// ===== data/arts.js =====
+// 功法：主修一门，可更换。tier 为品阶
+const GONGFA = {
+  yinqi:      { id: 'yinqi',      name: '引气诀',     tier: '黄', mult: 1.0, lifeAdd: 0,     breakAdd: 0,    intervalAdd: 0,    fortuneAdd: 0,     desc: '最寻常的入门功法' },
+  changchun:  { id: 'changchun',  name: '长春功',     tier: '玄', mult: 1.5, lifeAdd: 0.10,  breakAdd: 0,    intervalAdd: 0,    fortuneAdd: 0,     desc: '木德绵长，益寿延年' },
+  lieyang:    { id: 'lieyang',    name: '烈阳真解',   tier: '玄', mult: 1.9, lifeAdd: -0.10, breakAdd: 0,    intervalAdd: 0,    fortuneAdd: 0,     desc: '烈火烹油，燃寿求速' },
+  jiuzhuan:   { id: 'jiuzhuan',   name: '九转金身诀', tier: '地', mult: 2.0, lifeAdd: 0.25,  breakAdd: 0,    intervalAdd: 0,    fortuneAdd: 0,     desc: '锻体铸基，寿元悠长' },
+  wangqing:   { id: 'wangqing',   name: '太上忘情录', tier: '地', mult: 2.5, lifeAdd: 0,     breakAdd: 0.10, intervalAdd: 0,    fortuneAdd: -0.20, desc: '斩断红尘，机缘亦随之远去' },
+  damengqian: { id: 'damengqian', name: '大梦千秋',   tier: '天', mult: 3.2, lifeAdd: 0,     breakAdd: 0,    intervalAdd: 0.50, fortuneAdd: 0,     desc: '一梦千年，世事罕闻' },
+  taixu:      { id: 'taixu',      name: '太虚化龙经', tier: '仙', mult: 4.0, lifeAdd: 0,     breakAdd: 0,    intervalAdd: 0,    fortuneAdd: 0,     desc: '传说中的仙阶功法' },
+};
+
+// 神通：可同时持有多个，被动生效
+const SHENTONG = [
+  { id: 'guiyuan',   name: '归元术',   desc: '突破失败时修为保留 70%（默认 40%）' },
+  { id: 'guixi',     name: '龟息功',   desc: '寿元消耗速度 −25%' },
+  { id: 'neishi',    name: '神识内视', desc: '突破面板显示真实成功率' },
+  { id: 'guanxing',  name: '观星术',   desc: '预告下一个事件是机缘还是劫难' },
+  { id: 'wulei',     name: '五雷正法', desc: '突破失败时寿元损失减半' },
+  { id: 'suodi',     name: '缩地成寸', desc: '事件触发间隔 −20%', intervalAdd: -0.20 },
+  { id: 'mingxin',   name: '明心见性', desc: '免疫「道基受损」' },
+];
+
+
+// ===== data/debuffs.js =====
+// debuff 的权威定义。rate 为修炼速度的加法惩罚（正数表示减速多少）。
+// 事件与突破失败只负责按 id 附加，惩罚数值一律以此表为准。
+const DEBUFFS = {
+  daoji:    { id: 'daoji',    name: '道基受损', rate: 0.30, desc: '冲击境界失败，根基震荡' },
+  handu:    { id: 'handu',    name: '寒毒入髓', rate: 0.20, desc: '至阴之气盘踞经脉' },
+  kuxiu:    { id: 'kuxiu',    name: '灵机断绝', rate: 0.25, desc: '周遭灵气稀薄，引气艰难' },
+  leishang: { id: 'leishang', name: '雷伤未愈', rate: 0.20, desc: '天雷余威灼在识海' },
+  shenshi:  { id: 'shenshi',  name: '神识受损', rate: 0.25, desc: '神识过耗，参悟迟滞' },
+  tianyin:  { id: 'tianyin',  name: '天道烙印', rate: 0.30, desc: '为天道所记，举步维艰' },
+  xinmo:    { id: 'xinmo',    name: '心魔滋生', rate: 0.15, desc: '道心有隙，杂念丛生' },
+};
+
+function findDebuff(id) {
+  return DEBUFFS[id] ?? null;
+}
+
+
+// ===== data/events.js =====
+const EVENTS = [
+  // ── early · 机缘 ──────────────────────────────────────
+  {
+    id: 'dongzhongyishi',
+    title: '洞中遗蜕',
+    type: 'fortune',
+    pool: 'early',
+    text: '你循地脉深入，见一具枯坐的道人遗蜕，眉心一点灵光未散。',
+    options: [
+      { label: '上前参悟', effects: [{ kind: 'cultivation', levels: 0.8 }, { kind: 'breakAdd', value: -0.05, chance: 0.3 }] },
+      { label: '就地掩埋', effects: [{ kind: 'life', years: 20 }, { kind: 'luck', value: 1 }] },
+      { label: '转身离去', effects: [] },
+    ],
+  },
+  {
+    id: 'gudongcangjing',
+    title: '古洞藏经',
+    type: 'fortune',
+    pool: 'early',
+    text: '石壁夹缝中露出半卷玉简，字迹古拙，隐有草木生发之意。',
+    options: [
+      { label: '强行以神识读取', effects: [{ kind: 'gongfa', id: 'changchun' }, { kind: 'debuff', id: 'shenshi', name: '神识受损', years: 15, chance: 0.35 }] },
+      { label: '带回慢慢参研', effects: [{ kind: 'gongfa', id: 'changchun', chance: 0.6 }, { kind: 'cultivation', levels: 0.2 }] },
+    ],
+  },
+  {
+    id: 'lingquan',
+    title: '寒潭灵泉',
+    type: 'fortune',
+    pool: 'early',
+    text: '潭水清冽刺骨，水面浮着一层薄薄的灵气白雾。',
+    options: [
+      { label: '入潭洗髓', effects: [{ kind: 'life', years: 30 }, { kind: 'cureDebuff', id: 'daoji' }] },
+      { label: '取水炼化', effects: [{ kind: 'cultivation', levels: 0.5 }] },
+    ],
+  },
+  {
+    id: 'danyaoyiluo',
+    title: '丹药遗落',
+    type: 'fortune',
+    pool: 'early',
+    text: '崖下荒草里滚着一只玉瓶，瓶塞未封，丹香还带着体温。',
+    options: [
+      { label: '就地服下', effects: [{ kind: 'cultivation', levels: 0.9 }, { kind: 'life', years: -15, chance: 0.4 }] },
+      { label: '先辨药性', effects: [{ kind: 'cultivation', levels: 0.35 }, { kind: 'luck', value: 1 }] },
+      { label: '转赠同门', effects: [{ kind: 'luck', value: 2 }, { kind: 'breakAdd', value: 0.02 }] },
+    ],
+  },
+  {
+    id: 'sanxiuhuangong',
+    title: '散修换功',
+    type: 'fortune',
+    pool: 'early',
+    text: '坊市角落里，一个断臂散修摊开半旧的烈阳真解，只求换你三粒辟谷丹。',
+    options: [
+      { label: '倾囊换下', effects: [{ kind: 'gongfa', id: 'lieyang' }] },
+      { label: '借阅一夜', effects: [{ kind: 'gongfa', id: 'lieyang', chance: 0.5 }, { kind: 'cultivation', levels: 0.3 }] },
+      { label: '告与执法堂', effects: [{ kind: 'cultivation', levels: 0.45 }, { kind: 'luck', value: -2 }] },
+    ],
+  },
+  {
+    id: 'laoguishoufa',
+    title: '老龟授法',
+    type: 'fortune',
+    pool: 'early',
+    text: '溪心老龟浮出水面，背甲皲裂如古碑，缓缓吐出一串水泡。你听懂了那是一句口诀。',
+    options: [
+      { label: '叩首求法', effects: [{ kind: 'shentong', id: 'guixi' }] },
+      { label: '剖甲取材', effects: [{ kind: 'cultivation', levels: 0.9 }, { kind: 'luck', value: -2 }] },
+      { label: '掬水而饮', effects: [{ kind: 'life', years: 20 }] },
+    ],
+  },
+  {
+    id: 'shanmingongfeng',
+    title: '山民供奉',
+    type: 'fortune',
+    pool: 'early',
+    text: '山下村人抬着新酒与山果跪在洞口，说自你来后，谷中三年无虎。',
+    options: [
+      { label: '受其香火', effects: [{ kind: 'life', years: 25 }, { kind: 'luck', value: 1 }] },
+      { label: '授以吐纳', effects: [{ kind: 'luck', value: 3 }, { kind: 'cultivation', levels: -0.15 }] },
+      { label: '闭门不见', effects: [{ kind: 'cultivation', levels: 0.25 }, { kind: 'luck', value: -1 }] },
+    ],
+  },
+  {
+    id: 'tongmenzengdan',
+    title: '同门赠丹',
+    type: 'fortune',
+    pool: 'early',
+    text: '素无往来的师兄递来一枚筑基丹，说他此生已经走到头了，留着无用。',
+    options: [
+      { label: '拜谢服下', effects: [{ kind: 'cultivation', levels: 0.75 }] },
+      { label: '留待破关', effects: [{ kind: 'breakAdd', value: 0.04 }] },
+      { label: '婉言退还', effects: [{ kind: 'luck', value: 2 }, { kind: 'life', years: 10 }] },
+    ],
+  },
+  {
+    id: 'yeguanxingxiang',
+    title: '夜观星象',
+    type: 'fortune',
+    pool: 'early',
+    text: '是夜天心月孤，北斗第七星忽明忽暗，像在等谁去数它。',
+    options: [
+      { label: '彻夜推演', effects: [{ kind: 'shentong', id: 'guanxing' }, { kind: 'life', years: -15 }] },
+      { label: '循星而行', effects: [{ kind: 'luck', value: 2 }, { kind: 'cultivation', levels: 0.3 }] },
+      { label: '闭目安睡', effects: [{ kind: 'life', years: 12 }] },
+    ],
+  },
+  {
+    id: 'xipandunwu',
+    title: '溪畔顿悟',
+    type: 'fortune',
+    pool: 'early',
+    text: '溪水绕石而行，不争先，却先到了下游。你立在水边，胸中一处淤塞悄然松了。',
+    options: [
+      { label: '就水观心', effects: [{ kind: 'cultivation', levels: 0.5 }, { kind: 'breakAdd', value: 0.05 }] },
+      { label: '强参其理', effects: [{ kind: 'cultivation', levels: 0.95 }, { kind: 'breakAdd', value: -0.04, chance: 0.5 }] },
+    ],
+  },
+  // ── early · 劫难 ──────────────────────────────────────
+  {
+    id: 'zouhuorumo',
+    title: '走火入魔',
+    type: 'tribulation',
+    pool: 'early',
+    text: '行功至第九周天，一缕真气忽而逆冲，如刀刮过经脉。',
+    options: [
+      { label: '强压真气', effects: [{ kind: 'cultivation', levels: -0.4 }, { kind: 'debuff', id: 'daoji', name: '道基受损', years: 12 }] },
+      { label: '任其冲撞，以身试险', effects: [{ kind: 'life', years: -25 }, { kind: 'cultivation', levels: 0.6, chance: 0.5 }] },
+    ],
+  },
+  {
+    id: 'yaoshouxiji',
+    title: '妖兽袭夜',
+    type: 'tribulation',
+    pool: 'early',
+    text: '子夜风起，洞外传来一声兽吼，腥气扑面。',
+    options: [
+      { label: '闭息不动', effects: [{ kind: 'life', years: -10, chance: 0.4 }] },
+      { label: '出洞搏杀', effects: [{ kind: 'life', years: -30, chance: 0.6 }, { kind: 'cultivation', levels: 0.35 }] },
+    ],
+  },
+  {
+    id: 'tongmenxiangcan',
+    title: '同门相残',
+    type: 'tribulation',
+    pool: 'early',
+    text: '秘境窄道之上，同门反手一剑，只为你怀里那株三叶灵参。',
+    options: [
+      { label: '弃参保命', effects: [{ kind: 'cultivation', levels: -0.4 }, { kind: 'life', years: -12 }] },
+      { label: '拔剑相向', effects: [{ kind: 'life', years: -30, chance: 0.6 }, { kind: 'cultivation', levels: 0.55, chance: 0.5 }] },
+    ],
+  },
+  {
+    id: 'zongmenqingsuan',
+    title: '宗门清算',
+    type: 'tribulation',
+    pool: 'early',
+    text: '执法堂查出你私炼禁术，当众收去玉牌，罚俸三年。',
+    options: [
+      { label: '低头认罚', effects: [{ kind: 'cultivation', levels: -0.35 }] },
+      { label: '当堂辩白', effects: [{ kind: 'cultivation', levels: -0.75, chance: 0.5 }, { kind: 'breakAdd', value: 0.03 }] },
+      { label: '连夜逃山', effects: [{ kind: 'cultivation', levels: -0.15 }, { kind: 'life', years: -10 }, { kind: 'luck', value: -2 }] },
+    ],
+  },
+  {
+    id: 'handuruti',
+    title: '寒毒入体',
+    type: 'tribulation',
+    pool: 'early',
+    text: '北谷采药三日，寒气自足心一路爬进丹田，行功时经脉上结出白霜。',
+    options: [
+      { label: '运功逼毒', effects: [{ kind: 'cultivation', levels: -0.35 }] },
+      { label: '以寒淬脉', effects: [{ kind: 'debuff', id: 'handu', name: '寒毒入髓', years: 18 }, { kind: 'cultivation', levels: 0.6 }] },
+      { label: '强忍不理', effects: [{ kind: 'debuff', id: 'daoji', name: '道基受损', years: 14 }, { kind: 'life', years: -12, chance: 0.5 }] },
+    ],
+  },
+  {
+    id: 'xinmodiyu',
+    title: '心魔低语',
+    type: 'tribulation',
+    pool: 'early',
+    text: '夜半打坐，识海里有个与你一般声口的人说：何必再熬，就此停手也无人怪你。',
+    options: [
+      { label: '闭耳不闻', effects: [{ kind: 'breakAdd', value: -0.05 }] },
+      { label: '与之辩难', effects: [{ kind: 'life', years: -15 }, { kind: 'breakAdd', value: 0.06, chance: 0.55 }] },
+      { label: '斩念自封', effects: [{ kind: 'cultivation', levels: -0.45 }] },
+    ],
+  },
+  // ── mid · 机缘 ────────────────────────────────────────
+  {
+    id: 'mijingcantu',
+    title: '秘境残图',
+    type: 'fortune',
+    pool: 'mid',
+    text: '兽皮残图落到你手里，图上洞天早崩了大半，只余一线灵脉未断。',
+    options: [
+      { label: '独身入秘', effects: [{ kind: 'cultivation', levels: 1.1 }, { kind: 'life', years: -150, chance: 0.5 }] },
+      { label: '结伴同行', effects: [{ kind: 'cultivation', levels: 0.6 }, { kind: 'luck', value: 1 }] },
+      { label: '售图易丹', effects: [{ kind: 'cultivation', levels: 0.25 }, { kind: 'life', years: 150 }] },
+    ],
+  },
+  {
+    id: 'jianzhonggongming',
+    title: '剑冢共鸣',
+    type: 'fortune',
+    pool: 'mid',
+    text: '万剑插土如林，其中一柄无锋断剑忽然轻鸣，剑意贴地掠过，快得没有影子。',
+    options: [
+      { label: '拔剑受意', effects: [{ kind: 'shentong', id: 'suodi' }, { kind: 'life', years: -120 }] },
+      { label: '踏剑而行', effects: [{ kind: 'shentong', id: 'suodi', chance: 0.5 }, { kind: 'cultivation', levels: 0.4 }] },
+      { label: '拱手而退', effects: [{ kind: 'luck', value: 2 }] },
+    ],
+  },
+  {
+    id: 'gufocannian',
+    title: '古佛残念',
+    type: 'fortune',
+    pool: 'mid',
+    text: '石窟深处坐着一尊无面古佛，掌心一洼积水，映出你此生所有悔过的事。',
+    options: [
+      { label: '合掌照见', effects: [{ kind: 'shentong', id: 'mingxin' }, { kind: 'cultivation', levels: -0.3 }] },
+      { label: '掬水净心', effects: [{ kind: 'cureDebuff', id: 'daoji' }, { kind: 'cureDebuff', id: 'xinmo' }, { kind: 'life', years: 120 }] },
+      { label: '掷石破影', effects: [{ kind: 'cultivation', levels: 0.8 }, { kind: 'breakAdd', value: -0.05 }] },
+    ],
+  },
+  {
+    id: 'yaowangyifang',
+    title: '药王遗方',
+    type: 'fortune',
+    pool: 'mid',
+    text: '药王谷旧址的灶灰里埋着半张残方，末一味药引写着：三百年心头血。',
+    options: [
+      { label: '依方自炼', effects: [{ kind: 'life', years: 400 }, { kind: 'cultivation', levels: -0.5 }] },
+      { label: '以草代血', effects: [{ kind: 'life', years: 160 }, { kind: 'cureDebuff', id: 'daoji' }] },
+      { label: '焚方', effects: [{ kind: 'luck', value: 2 }, { kind: 'breakAdd', value: 0.03 }] },
+    ],
+  },
+  {
+    id: 'daoyoulundao',
+    title: '道友论道',
+    type: 'fortune',
+    pool: 'mid',
+    text: '云海石台上，一位白衣道友与你对坐三日，只问了你一个问题。',
+    options: [
+      { label: '据实以答', effects: [{ kind: 'cultivation', levels: 0.5 }, { kind: 'breakAdd', value: 0.04 }] },
+      { label: '反诘相难', effects: [{ kind: 'cultivation', levels: 1.0 }, { kind: 'breakAdd', value: -0.05, chance: 0.4 }] },
+      { label: '默然不语', effects: [{ kind: 'breakAdd', value: 0.06 }, { kind: 'cultivation', levels: -0.2 }] },
+    ],
+  },
+  {
+    id: 'shizhongcangyu',
+    title: '石中藏玉',
+    type: 'fortune',
+    pool: 'mid',
+    text: '矿脉尽头一方顽石，叩之声如钟鸣，石心里裹着一枚温润如脂的古玉。',
+    options: [
+      { label: '破石取玉', effects: [{ kind: 'gongfa', id: 'jiuzhuan' }] },
+      { label: '抱石炼体', effects: [{ kind: 'gongfa', id: 'jiuzhuan', chance: 0.5 }, { kind: 'cultivation', levels: 0.5 }, { kind: 'life', years: -100 }] },
+      { label: '献与宗门', effects: [{ kind: 'luck', value: 3 }, { kind: 'cultivation', levels: 0.3 }] },
+    ],
+  },
+  {
+    id: 'wangchuandukou',
+    title: '忘川渡口',
+    type: 'fortune',
+    pool: 'mid',
+    text: '渡口无舟，只有一位老翁靠着桨说：要过此川，须先留下一样你最舍不得的。',
+    options: [
+      { label: '舍去旧情', effects: [{ kind: 'gongfa', id: 'wangqing' }] },
+      { label: '舍去阳寿', effects: [{ kind: 'life', years: -300 }, { kind: 'cultivation', levels: 0.9 }] },
+      { label: '不渡', effects: [{ kind: 'luck', value: 1 }] },
+    ],
+  },
+  {
+    id: 'zhenzhongwufa',
+    title: '阵中悟法',
+    type: 'fortune',
+    pool: 'mid',
+    text: '你误踏进一座上古困阵，四壁星斗流转，走了七日仍在原地。',
+    options: [
+      { label: '内视己身', effects: [{ kind: 'shentong', id: 'neishi' }, { kind: 'life', years: -80 }] },
+      { label: '硬破阵眼', effects: [{ kind: 'cultivation', levels: 0.7 }, { kind: 'life', years: -250, chance: 0.5 }] },
+      { label: '席地静待', effects: [{ kind: 'life', years: -200 }, { kind: 'breakAdd', value: 0.04 }] },
+    ],
+  },
+  // ── mid · 劫难 ────────────────────────────────────────
+  {
+    id: 'xinmohuaxing',
+    title: '心魔化形',
+    type: 'tribulation',
+    pool: 'mid',
+    text: '心魔自识海踏出，眉眼与你分毫不差，开口便是你最不愿听的那句实话。',
+    options: [
+      { label: '力压魔念', effects: [{ kind: 'breakAdd', value: -0.06 }, { kind: 'debuff', id: 'xinmo', name: '心魔滋生', years: 60 }] },
+      { label: '与魔同栖', effects: [{ kind: 'debuff', id: 'xinmo', name: '心魔滋生', years: 120 }, { kind: 'cultivation', levels: 0.7 }] },
+      { label: '焚身破妄', effects: [{ kind: 'life', years: -300 }, { kind: 'breakAdd', value: 0.03 }] },
+    ],
+  },
+  {
+    id: 'yinguochanshen',
+    title: '因果缠身',
+    type: 'tribulation',
+    pool: 'mid',
+    text: '你昔年随手斩过的那条蛟，其子今日伏在你阶前，只求你也偿一次命。',
+    options: [
+      { label: '偿其一击', effects: [{ kind: 'life', years: -350 }, { kind: 'luck', value: 3 }] },
+      { label: '再斩一次', effects: [{ kind: 'life', years: -150 }, { kind: 'cultivation', levels: 0.3 }, { kind: 'luck', value: -3 }] },
+      { label: '远遁', effects: [{ kind: 'life', years: -220 }] },
+    ],
+  },
+  {
+    id: 'fengyinfanshi',
+    title: '封印反噬',
+    type: 'tribulation',
+    pool: 'mid',
+    text: '你早年封在丹田里的那道异种真气挣开符禁，顺着经脉一路烧到眉心。',
+    options: [
+      { label: '重下封禁', effects: [{ kind: 'cultivation', levels: -0.7 }] },
+      { label: '导入四肢', effects: [{ kind: 'cultivation', levels: -0.25 }, { kind: 'debuff', id: 'daoji', name: '道基受损', years: 90 }] },
+      { label: '任其焚脉', effects: [{ kind: 'life', years: -400 }, { kind: 'cultivation', levels: 0.4, chance: 0.5 }] },
+    ],
+  },
+  {
+    id: 'jiudixunchou',
+    title: '旧敌寻仇',
+    type: 'tribulation',
+    pool: 'mid',
+    text: '三百年前被你废去金丹的那人站在山门外，如今他身后跟着两位化神。',
+    options: [
+      { label: '出山一战', effects: [{ kind: 'life', years: -350 }, { kind: 'cultivation', levels: -0.4 }, { kind: 'breakAdd', value: 0.05, chance: 0.5 }] },
+      { label: '闭山避战', effects: [{ kind: 'cultivation', levels: -0.6 }, { kind: 'luck', value: -1 }] },
+      { label: '倾家赔罪', effects: [{ kind: 'cultivation', levels: -0.9 }, { kind: 'luck', value: 2 }] },
+    ],
+  },
+  {
+    id: 'lingqikujie',
+    title: '灵气枯竭',
+    type: 'tribulation',
+    pool: 'mid',
+    text: '洞府下的灵脉一夜断绝，吐纳之间只余薄薄一线。草木先枯，人后知。',
+    options: [
+      { label: '另觅洞府', effects: [{ kind: 'life', years: -250 }] },
+      { label: '掘地引脉', effects: [{ kind: 'debuff', id: 'daoji', name: '道基受损', years: 60 }, { kind: 'cultivation', levels: 0.5, chance: 0.5 }] },
+      { label: '枯坐苦修', effects: [{ kind: 'debuff', id: 'kuxiu', name: '灵机断绝', years: 100 }, { kind: 'cultivation', levels: -0.5 }, { kind: 'breakAdd', value: 0.04 }] },
+    ],
+  },
+  {
+    id: 'canbeiwuyin',
+    title: '残碑误引',
+    type: 'tribulation',
+    pool: 'mid',
+    text: '荒原上立着半截道碑，碑文缺了三字。你依它所指行功，越走越偏。',
+    options: [
+      { label: '循碑深入', effects: [{ kind: 'luck', value: -2 }, { kind: 'cultivation', levels: -0.6 }] },
+      { label: '中途折返', effects: [{ kind: 'cultivation', levels: -0.25 }, { kind: 'life', years: -150 }] },
+      { label: '拓碑焚之', effects: [{ kind: 'luck', value: -1 }, { kind: 'cultivation', levels: -0.3 }, { kind: 'breakAdd', value: 0.03 }] },
+    ],
+  },
+  // ── late · 机缘 ───────────────────────────────────────
+  {
+    id: 'leichitiaoxin',
+    title: '雷池调心',
+    type: 'fortune',
+    pool: 'late',
+    text: '九天雷池之下，紫电如瀑。有声在你识海中问：可愿以身承雷？',
+    options: [
+      { label: '引雷淬体', effects: [{ kind: 'shentong', id: 'wulei' }, { kind: 'life', years: -200 }] },
+      { label: '静观其变', effects: [{ kind: 'shentong', id: 'guanxing', chance: 0.5 }, { kind: 'cultivation', levels: 0.3 }] },
+      { label: '掉头就走', effects: [{ kind: 'luck', value: -1 }] },
+    ],
+  },
+  {
+    id: 'dadaoyousheng',
+    title: '大道有声',
+    type: 'fortune',
+    pool: 'late',
+    text: '万籁俱寂处忽然有一声，不入耳而入心，讲的是一场千年的梦。',
+    options: [
+      { label: '入梦听讲', effects: [{ kind: 'gongfa', id: 'damengqian' }, { kind: 'life', years: -1500 }] },
+      { label: '记其半阕', effects: [{ kind: 'gongfa', id: 'damengqian', chance: 0.5 }, { kind: 'cultivation', levels: 0.4 }] },
+      { label: '掩耳', effects: [{ kind: 'breakAdd', value: 0.05 }] },
+    ],
+  },
+  {
+    id: 'longyuanhuaxing',
+    title: '龙渊化形',
+    type: 'fortune',
+    pool: 'late',
+    text: '深渊底下盘着一具早已石化的龙骨，你的影子落上去，竟自行游动起来。',
+    options: [
+      { label: '以身饲龙', effects: [{ kind: 'gongfa', id: 'taixu' }, { kind: 'life', years: -3000 }] },
+      { label: '叩问龙魂', effects: [{ kind: 'gongfa', id: 'taixu', chance: 0.35 }, { kind: 'cultivation', levels: 0.5 }, { kind: 'life', years: -800 }] },
+      { label: '取骨炼器', effects: [{ kind: 'cultivation', levels: 1.2 }, { kind: 'luck', value: -2 }] },
+    ],
+  },
+  {
+    id: 'guiyuanzhenyi',
+    title: '归元真意',
+    type: 'fortune',
+    pool: 'late',
+    text: '你在自己的丹田里看见一条来路：万法奔流，最后都归到一处去。',
+    options: [
+      { label: '溯流而上', effects: [{ kind: 'shentong', id: 'guiyuan' }, { kind: 'cultivation', levels: -0.5 }] },
+      { label: '顺流而下', effects: [{ kind: 'cultivation', levels: 1.1 }] },
+      { label: '立于中流', effects: [{ kind: 'breakAdd', value: 0.06 }, { kind: 'life', years: 1000 }] },
+    ],
+  },
+  {
+    id: 'xinghaishiyi',
+    title: '星海拾遗',
+    type: 'fortune',
+    pool: 'late',
+    text: '星海尽头浮着一截断裂的仙桥，桥砖里嵌着上一纪元遗落的道则。',
+    options: [
+      { label: '掘砖参道', effects: [{ kind: 'cultivation', levels: 1.4 }, { kind: 'breakAdd', value: -0.06, chance: 0.4 }] },
+      { label: '踏桥远眺', effects: [{ kind: 'cultivation', levels: 0.5 }, { kind: 'cureDebuff', id: 'daoji' }, { kind: 'luck', value: 2 }] },
+      { label: '拆桥为舟', effects: [{ kind: 'cultivation', levels: 0.8 }, { kind: 'life', years: -1200 }] },
+    ],
+  },
+  {
+    id: 'suiyuechanghe',
+    title: '岁月长河',
+    type: 'fortune',
+    pool: 'late',
+    text: '长河自你脚下流过，上游是你少年时的那场雪，下游是一片你不敢看的白。',
+    options: [
+      { label: '逆流取水', effects: [{ kind: 'life', years: 4000 }, { kind: 'cultivation', levels: -0.7 }] },
+      { label: '掬水自照', effects: [{ kind: 'life', years: 1500 }, { kind: 'breakAdd', value: 0.03 }] },
+      { label: '涉水而过', effects: [{ kind: 'cultivation', levels: 1.0 }, { kind: 'life', years: -800 }] },
+    ],
+  },
+  // ── late · 劫难 ───────────────────────────────────────
+  {
+    id: 'tiandaoyazhi',
+    title: '天道压制',
+    type: 'tribulation',
+    pool: 'late',
+    text: '你每进一分，头顶那片天就低一寸，压得四野草木尽伏。',
+    options: [
+      { label: '俯首', effects: [{ kind: 'cultivation', levels: -0.5 }] },
+      { label: '昂首相抗', effects: [{ kind: 'cultivation', levels: -1.0 }, { kind: 'debuff', id: 'tianyin', name: '天道烙印', years: 600 }, { kind: 'breakAdd', value: 0.07 }] },
+      { label: '藏形匿息', effects: [{ kind: 'cultivation', levels: -0.3 }, { kind: 'debuff', id: 'daoji', name: '道基受损', years: 500 }] },
+    ],
+  },
+  {
+    id: 'shouyuanjiangjin',
+    title: '寿元将尽',
+    type: 'tribulation',
+    pool: 'late',
+    text: '铜镜里那张脸忽然显出老相。你数了数剩下的日子，只够走完一程。',
+    options: [
+      { label: '燃寿冲关', effects: [{ kind: 'life', years: -2500 }, { kind: 'cultivation', levels: 1.2 }] },
+      { label: '焚功续命', effects: [{ kind: 'cultivation', levels: -1.0 }, { kind: 'life', years: 1200 }] },
+      { label: '枯坐待尽', effects: [{ kind: 'life', years: -1500 }, { kind: 'breakAdd', value: 0.05 }] },
+    ],
+  },
+  {
+    id: 'dadaowuqing',
+    title: '大道无情',
+    type: 'tribulation',
+    pool: 'late',
+    text: '你渡过的人不知凡几，今日方知大道从不记得谁曾渡过谁。',
+    options: [
+      { label: '心灰意懒', effects: [{ kind: 'breakAdd', value: -0.08 }] },
+      { label: '强自振作', effects: [{ kind: 'breakAdd', value: -0.03 }, { kind: 'life', years: -1200 }] },
+      { label: '就此绝情', effects: [{ kind: 'breakAdd', value: 0.05 }, { kind: 'luck', value: -3 }] },
+    ],
+  },
+  {
+    id: 'jieyunxianzhi',
+    title: '劫云先至',
+    type: 'tribulation',
+    pool: 'late',
+    text: '你修为尚未圆满，劫云却已在头顶盘了三日，一日低过一日。',
+    options: [
+      { label: '仰首引劫', effects: [{ kind: 'life', years: -3000 }, { kind: 'debuff', id: 'leishang', name: '雷伤未愈', years: 400 }, { kind: 'cultivation', levels: 0.9, chance: 0.5 }] },
+      { label: '布阵遮掩', effects: [{ kind: 'life', years: -1200 }, { kind: 'debuff', id: 'daoji', name: '道基受损', years: 500 }] },
+      { label: '遁入地脉', effects: [{ kind: 'life', years: -900 }, { kind: 'luck', value: -2 }] },
+    ],
+  },
+];
+
+// 从符合当前境界的池中加权抽取，最近 8 个不重复
+function pickEvent(state, rnd = Math.random) {
+  const pool = poolFor(state.realm);
+  const recent = state.recentEventIds ?? [];
+  let candidates = EVENTS.filter((e) => e.pool === pool && !recent.includes(e.id));
+  if (candidates.length === 0) candidates = EVENTS.filter((e) => e.pool === pool);
+  if (candidates.length === 0) candidates = EVENTS;
+  if (candidates.length === 0) return null;
+
+  // 气运与「福缘深厚」都只抬高机缘的权重，不改变劫难
+  const luckyWeight = (state.talentIds ?? []).includes('fuyuanshenhou') ? 2 : 1;
+  const luckBonus = Math.max(0, state.luck ?? 0) * 0.2;
+  const weights = candidates.map((e) => (e.type === 'fortune' ? luckyWeight + luckBonus : 1));
+  const total = weights.reduce((a, w) => a + w, 0);
+  let roll = rnd() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    if (roll < weights[i]) return candidates[i].id;
+    roll -= weights[i];
+  }
+  return candidates[candidates.length - 1].id;
+}
+
+function poolFor(realm) {
+  if (realm <= 2) return 'early';
+  if (realm <= 5) return 'mid';
+  return 'late';
+}
+
+function findEvent(id) {
+  return EVENTS.find((e) => e.id === id) ?? null;
+}
+
+
+// ===== logic/formulas.js =====
+// 把（境界, 小层）压成单一等级序号 0..35
+function levelIndex(realm, sub) {
+  return realm * 4 + sub;
+}
+
+// 第 n 级所需修为
+function req(n) {
+  return REQ_BASE * Math.pow(REQ_GROWTH, n);
+}
+
+// 第 n 级的基础修为速率（修为 / 游戏年）
+function baseRate(n) {
+  return RATE_BASE * Math.pow(RATE_GROWTH, n);
+}
+
+// 裸装（无任何加成）修满第 n 级所需的现实秒数。1 现实秒 = 1 游戏年
+function levelSeconds(n) {
+  return req(n) / baseRate(n);
+}
+
+function findSpirit(id) {
+  return SPIRITS.find((s) => s.id === id) ?? SPIRITS[4];
+}
+
+function stateTalents(state) {
+  return (state.talentIds ?? []).map((id) => TALENTS.find((t) => t.id === id)).filter(Boolean);
+}
+
+function hasTalent(state, id) {
+  return (state.talentIds ?? []).includes(id);
+}
+
+function hasShentong(state, id) {
+  return (state.shentongIds ?? []).includes(id);
+}
+
+function stateShentong(state) {
+  return (state.shentongIds ?? []).map((id) => SHENTONG.find((s) => s.id === id)).filter(Boolean);
+}
+
+function sumField(list, field) {
+  return list.reduce((acc, x) => acc + (x[field] ?? 0), 0);
+}
+
+// 功法倍率。「过目不忘」只放大超出 1.0 的部分
+function gongfaMult(state) {
+  const g = GONGFA[state.gongfaId] ?? GONGFA.yinqi;
+  const amp = hasTalent(state, 'guomubuwang') ? TALENTS.find((t) => t.id === 'guomubuwang').gongfaAmp : 1;
+  return 1 + (g.mult - 1) * amp;
+}
+
+function hasDebuff(state, id) {
+  return (state.debuffs ?? []).some((d) => d.id === id);
+}
+
+// 修炼速度的全部加法修正之和
+function rateAdditive(state) {
+  const talents = stateTalents(state);
+  let add = sumField(talents, 'rateAdd');
+  if (hasTalent(state, 'daqiwancheng')) add += state.realm >= 4 ? 0.60 : -0.20;
+  add += (state.upgrades?.daoji ?? 0) * 0.05;
+  add -= (state.debuffs ?? []).reduce((sum, d) => sum + (DEBUFFS[d.id]?.rate ?? 0), 0);
+  return add;
+}
+
+function cultivationRate(state) {
+  const n = levelIndex(state.realm, state.sub);
+  const spirit = findSpirit(state.spiritId);
+  return baseRate(n) * spirit.mult * gongfaMult(state) * Math.max(0.1, 1 + rateAdditive(state));
+}
+
+function lifespanCap(state) {
+  const base = REALMS[state.realm].life;
+  if (!Number.isFinite(base)) return Infinity;
+  const g = GONGFA[state.gongfaId] ?? GONGFA.yinqi;
+  const add = findSpirit(state.spiritId).lifeAdd
+    + sumField(stateTalents(state), 'lifeAdd')
+    + (g.lifeAdd ?? 0)
+    + (state.upgrades?.guiling ?? 0) * 0.03;
+  return base * (1 + add);
+}
+
+// 修为溢出带来的突破加成：每额外攒满 1 倍当前层需求 +15%，封顶 +30%
+function overflowBonus(state) {
+  const need = req(levelIndex(state.realm, state.sub));
+  const extra = Math.max(0, state.cultivation - need);
+  return Math.min(0.30, Math.floor(extra / need) * 0.15);
+}
+
+function breakthroughChance(state) {
+  const g = GONGFA[state.gongfaId] ?? GONGFA.yinqi;
+  const add = findSpirit(state.spiritId).breakAdd
+    + sumField(stateTalents(state), 'breakAdd')
+    + (g.breakAdd ?? 0)
+    + (state.upgrades?.tianxin ?? 0) * 0.02
+    + (state.permanentBreakAdd ?? 0);
+  const p = REALMS[state.realm].chance * (1 + add) + overflowBonus(state);
+  return Math.min(0.95, Math.max(0.05, p));
+}
+
+// 机缘收益 / 劫难损失的加法修正
+function fortuneModifier(state) {
+  const g = GONGFA[state.gongfaId] ?? GONGFA.yinqi;
+  return 1 + sumField(stateTalents(state), 'fortuneAdd') + (g.fortuneAdd ?? 0);
+}
+
+// 事件间隔加法修正
+function intervalModifier(state) {
+  const g = GONGFA[state.gongfaId] ?? GONGFA.yinqi;
+  const add = sumField(stateTalents(state), 'intervalAdd')
+    + sumField(stateShentong(state), 'intervalAdd')
+    + (g.intervalAdd ?? 0);
+  return Math.max(0.2, 1 + add);
+}
+
+// 寿元消耗速度倍率
+function ageRate(state) {
+  return hasShentong(state, 'guixi') ? 0.75 : 1;
+}
+
+// 道消 / 飞升时结算的道韵
+function daoyunGain(state) {
+  const r = state.ascended ? 9 : state.realm;
+  return Math.floor(Math.pow(r + 1, 2) * 5 + state.age / 100 + (state.eventsSeen ?? 0) * 0.2);
+}
+
+
+// ===== logic/state.js =====
+const SAVE_VERSION = 1;
+const SAVE_KEY = 'xiuxian-sim.save.v1';
+
+// 按 weight 加权抽取灵根，并决定其属性
+function rollSpirit(rnd) {
+  const total = SPIRITS.reduce((a, s) => a + s.weight, 0);
+  let roll = rnd() * total;
+  let picked = SPIRITS[SPIRITS.length - 1];
+  for (const s of SPIRITS) {
+    if (roll < s.weight) { picked = s; break; }
+    roll -= s.weight;
+  }
+  const pool = picked.mutant ? MUTANT_ELEMENTS : ELEMENTS;
+  const elements = [];
+  if (picked.mutant) {
+    elements.push(pool[Math.floor(rnd() * pool.length) % pool.length]);
+  } else {
+    const shuffled = [...ELEMENTS];
+    const start = Math.floor(rnd() * ELEMENTS.length) % ELEMENTS.length;
+    for (let i = 0; i < picked.count; i++) elements.push(shuffled[(start + i) % ELEMENTS.length]);
+  }
+  return { spiritId: picked.id, elements };
+}
+
+// 抽 1~2 个天赋，30% 概率抽到 2 个，同局不重复
+function rollTalents(rnd) {
+  const count = rnd() < 0.3 ? 2 : 1;
+  const pool = TALENTS.map((t) => t.id);
+  const picked = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const idx = Math.floor(rnd() * pool.length) % pool.length;
+    picked.push(pool.splice(idx, 1)[0]);
+  }
+  return picked;
+}
+
+// upgrades / daoyun / lifetimeCount 跨世继承，由 actions.reincarnate 传入
+function createState(rnd = Math.random, carry = {}) {
+  const { spiritId, elements } = rollSpirit(rnd);
+  return {
+    version: SAVE_VERSION,
+    daoHao: '无名散修',
+    realm: 0,
+    sub: 0,
+    cultivation: 0,
+    age: START_AGE,
+    spiritId,
+    elements,
+    talentIds: rollTalents(rnd),
+    gongfaId: 'yinqi',
+    shentongIds: [],
+    debuffs: [],
+    permanentBreakAdd: 0,
+    luck: 0,
+    eventsSeen: 0,
+    recentEventIds: [],
+    nextEventIn: 20,
+    pendingEventId: null,
+    dead: false,
+    ascended: false,
+    daoyunSettled: false,
+    _acc: 0,
+    lastSaveAt: 0,
+    logLines: [],
+    daoyun: carry.daoyun ?? 0,
+    upgrades: carry.upgrades ?? { daoji: 0, tianxin: 0, guiling: 0 },
+    lifetimeCount: carry.lifetimeCount ?? 1,
+  };
+}
+
+function serialize(state) {
+  return JSON.stringify(state);
+}
+
+// 反序列化失败、版本不匹配、关键字段越界，一律返回 null，由调用方开新档。
+//
+// 字段校验是必需的而不是防御性冗余：formulas.js 的 lifespanCap / breakthroughChance
+// 直接取 REALMS[state.realm]，realm 越界会抛 TypeError 白屏；而 age/cultivation 若为
+// NaN，会顺着 daoyunGain 污染跨世继承的道韵（NaN 一旦存盘就永久传染）。
+// 在这个边界上响亮地失败（开新档），好过让坏数据静默流进游戏。
+function deserialize(json) {
+  if (typeof json !== 'string' || json.length === 0) return null;
+  let data;
+  try {
+    data = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  if (!data || typeof data !== 'object') return null;
+  if (data.version !== SAVE_VERSION) return null;
+  if (!Number.isInteger(data.realm) || data.realm < 0 || data.realm >= REALMS.length) return null;
+  if (!Number.isInteger(data.sub) || data.sub < 0 || data.sub > 3) return null;
+  for (const key of ['cultivation', 'age', '_acc', 'daoyun']) {
+    if (!Number.isFinite(data[key])) return null;
+  }
+  return data;
+}
+
+
+// ===== logic/tick.js =====
+// 固定步长（游戏年）。任何 dt 都被拆成整数个 STEP + 存入 state._acc 的余数，
+// 这是 tick(10) 与 10×tick(1) 结果一致的前提，改动前请先跑 tests/tick.test.mjs
+const STEP = 0.1;
+
+const OFFLINE_CAP_SECONDS = 8 * 3600;
+const OFFLINE_EFFICIENCY = 0.6;
+
+// 离线最多消耗剩余寿元的这个比例。见 applyOffline 中的注释，这个夹取是必须的
+const OFFLINE_LIFE_SHARE = 0.5;
+
+const EVENT_MIN = 25;
+const EVENT_MAX = 45;
+
+// 事件间隔随当前小层耗时缩放。小层耗时按 1.15^n 指数增长，间隔若固定，
+// 渡劫一个境界就会塞进约 150 次弹窗，而练气只有 2 次——后期变成纯刷屏，
+// 且每次弹窗都硬停时间，挂机游戏就挂不动了。按比例缩放后每个境界稳定在
+// 10 次左右。EVENT_MIN 作为地板，保住前期原有的密度。
+const EVENT_LEVEL_RATIO = 0.4;
+
+// 0.1 在二进制浮点下并非精确值，反复 += / -= 会让余数系统性地"差一点点"落到 STEP
+// 之下，导致本该发生的最后一步被吞掉（例如 acc 从 3 反复减 0.1 时，第 30 次减法前
+// 余数是 0.09999999999999848，严格 >= 0.1 判负）。经验证：dt=0.3/2/3/4/20/50/1000
+// 单次调用、以及跨调用累积都会踩到，且始终朝"少走一步"这一个方向系统性偏，不是
+// 随机抖动——这正是本任务要杜绝的"系统性漂移"。加一个远小于 STEP、又远大于可观测
+// 浮点噪声（实测上限量级 ~3e-8）的容差消掉这个边界误判。
+const ACC_EPSILON = 1e-6;
+
+function advanceOneStep(state, opts) {
+  state.age += STEP * ageRate(state);
+  state.cultivation += cultivationRate(state) * STEP;
+
+  // 小层晋升，溢出结转；圆满层不自动突破
+  while (state.sub < 3 && state.cultivation >= req(levelIndex(state.realm, state.sub))) {
+    state.cultivation -= req(levelIndex(state.realm, state.sub));
+    state.sub += 1;
+  }
+
+  for (const d of state.debuffs) d.remaining -= STEP;
+  if (state.debuffs.some((d) => d.remaining <= 0)) {
+    state.debuffs = state.debuffs.filter((d) => d.remaining > 0);
+  }
+
+  // 事件倒计时只在在线时推进——机缘必须由玩家亲自抉择
+  if (!opts.offline) {
+    state.nextEventIn -= STEP;
+    if (state.nextEventIn <= 0) {
+      state.pendingEventId = pickEvent(state, opts.rng);
+      const base = Math.max(EVENT_MIN, levelSeconds(levelIndex(state.realm, state.sub)) * EVENT_LEVEL_RATIO);
+      const span = base + opts.rng() * (EVENT_MAX - EVENT_MIN);
+      state.nextEventIn = span * intervalModifier(state);
+    }
+  }
+
+  if (state.age >= lifespanCap(state)) state.dead = true;
+}
+
+// 唯一的时间推进入口。dt 单位为现实秒（= 游戏年）
+function tick(state, dt, opts = {}) {
+  const options = { offline: false, rng: Math.random, ...opts };
+  if (state.dead || state.ascended || state.realm >= ASCEND_REALM) return;
+
+  // 有待抉择的事件时时间完全冻结，连累加器都不进——否则弹窗挂着的这段现实时间
+  // 会堆进 _acc，玩家一点选项就瞬间跳过几十年
+  if (state.pendingEventId) return;
+
+  state._acc += dt;
+  while (state._acc >= STEP - ACC_EPSILON) {
+    advanceOneStep(state, options);
+    state._acc -= STEP;
+    if (state.dead) { state._acc = 0; return; }
+    if (state.pendingEventId) return;
+  }
+}
+
+// 离线结算：封顶 8 小时、按 60% 效率折算，走与在线完全相同的 tick
+function applyOffline(state, elapsedSeconds) {
+  const cappedSeconds = Math.min(Math.max(0, elapsedSeconds), OFFLINE_CAP_SECONDS);
+  const ageBefore = state.age;
+  const cultBefore = state.cultivation;
+  const realmBefore = state.realm;
+  const subBefore = state.sub;
+
+  // 闭关不会闭死人。在 1 秒 = 1 游戏年的尺度下，练气期寿元余量约 104 年 ≈ 104 秒，
+  // 不夹取的话玩家关掉标签页 3 分钟回来就是死的——挂机游戏惩罚挂机，前提就崩了。
+  // 夹取到剩余寿元的一半后，长期挂机只会渐近逼近寿限、永不触及；而「寿元见底时
+  // 要不要赌这一把突破」的压力完整留在在线玩法里。死亡应当来自玩家的抉择，
+  // 而不是来自他关掉了标签页。
+  const wanted = cappedSeconds * OFFLINE_EFFICIENCY;
+  const headroom = Math.max(0, lifespanCap(state) - state.age);
+  const allowed = (headroom * OFFLINE_LIFE_SHARE) / ageRate(state);
+  const granted = Math.min(wanted, allowed);
+
+  tick(state, granted, { offline: true });
+
+  return {
+    cappedSeconds,
+    years: state.age - ageBefore,
+    cultivationGained: state.cultivation - cultBefore,
+    levelsGained: levelIndex(state.realm, state.sub) - levelIndex(realmBefore, subBefore),
+    truncated: granted < wanted - 1e-9,
+    died: state.dead,
+  };
+}
+
+
+// ===== logic/persist.js =====
+// 不能只写 typeof：在不透明源（某些 file:// 场景）、隐私模式、或企业策略禁用存储时，
+// 访问 localStorage 属性本身就会抛 SecurityError，而 typeof 挡不住会抛的 getter。
+// 存储不可用时降级成「能玩但不存档」，好过让 boot() 崩掉、整页只剩静态骨架——
+// 这个游戏的交付前提就是双击 dist/index.html 就能玩。
+function defaultStorage() {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveGame(state, storage = defaultStorage(), now = Date.now()) {
+  if (!storage) return false;
+  state.lastSaveAt = now;
+  try {
+    storage.setItem(SAVE_KEY, serialize(state));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 返回 { state, offline } 或 null（无存档 / 存档损坏 / 版本不符）
+function loadGame(storage = defaultStorage(), now = Date.now()) {
+  if (!storage) return null;
+  let raw;
+  try {
+    raw = storage.getItem(SAVE_KEY);
+  } catch {
+    return null;
+  }
+  const state = deserialize(raw);
+  if (!state) return null;
+
+  // 时钟回拨时按 0 处理，避免负收益
+  const elapsed = Math.max(0, (now - (state.lastSaveAt ?? now)) / 1000);
+  const offline = applyOffline(state, elapsed);
+  return { state, offline };
+}
+
+function clearSave(storage = defaultStorage()) {
+  if (storage) storage.removeItem(SAVE_KEY);
+}
+
+
+// ===== logic/actions.js =====
+const FAIL_KEEP = 0.40;
+const FAIL_KEEP_GUIYUAN = 0.70;
+const FAIL_LIFE_COST = 0.08;
+const DAOJI_DURATION = 0.05; // 当前境界寿元上限的 5%
+
+function canBreakthrough(state) {
+  if (state.dead || state.ascended) return false;
+  if (state.realm >= ASCEND_REALM) return false;
+  if (state.sub !== 3) return false;
+  return state.cultivation >= req(levelIndex(state.realm, 3));
+}
+
+function attemptBreakthrough(state, rnd = Math.random) {
+  if (!canBreakthrough(state)) return { attempted: false };
+
+  const chance = breakthroughChance(state);
+  const success = rnd() < chance;
+  const fromRealm = state.realm;
+
+  if (success) {
+    state.realm += 1;
+    state.sub = 0;
+    state.cultivation = 0;
+    if (state.realm >= ASCEND_REALM) state.ascended = true;
+    return { attempted: true, success: true, chance, fromRealm, toRealm: state.realm };
+  }
+
+  const keep = hasShentong(state, 'guiyuan') ? FAIL_KEEP_GUIYUAN : FAIL_KEEP;
+  state.cultivation = req(levelIndex(state.realm, 3)) * keep;
+
+  const lifeCost = REALMS[fromRealm].life * FAIL_LIFE_COST * (hasShentong(state, 'wulei') ? 0.5 : 1);
+  state.age += lifeCost;
+
+  if (!hasShentong(state, 'mingxin')) {
+    const duration = REALMS[fromRealm].life * DAOJI_DURATION;
+    const existing = state.debuffs.find((d) => d.id === 'daoji');
+    if (existing) existing.remaining += duration;
+    else state.debuffs.push({ id: 'daoji', name: '道基受损', remaining: duration });
+  }
+
+  if (state.age >= lifespanCap(state)) state.dead = true;
+
+  return { attempted: true, success: false, chance, fromRealm, lifeCost, died: state.dead };
+}
+
+const RECENT_WINDOW = 8;
+const DUP_SHENTONG_COMPENSATION = 0.3; // 重复神通折算为 0.3 层修为
+
+// 结算玩家对事件的选择。optionIndex 为所选选项下标
+function resolveEvent(state, event, optionIndex, rnd = Math.random) {
+  if (!event) return { applied: [] };
+  const option = event.options[optionIndex];
+  if (!option) return { applied: [] };
+
+  const mod = fortuneModifier(state);
+  const need = req(levelIndex(state.realm, state.sub));
+  const applied = [];
+
+  for (const f of option.effects) {
+    if (f.chance !== undefined && rnd() >= f.chance) continue;
+
+    switch (f.kind) {
+      case 'cultivation':
+        state.cultivation = Math.max(0, state.cultivation + need * f.levels * mod);
+        applied.push(f.levels > 0 ? '修为精进' : '修为折损');
+        break;
+      case 'life':
+        // years 为正表示增寿（年龄减少），为负表示折寿（年龄增加）
+        state.age -= f.years * mod;
+        applied.push(f.years > 0 ? '寿元增益' : '折损阳寿');
+        break;
+      case 'breakAdd':
+        state.permanentBreakAdd = (state.permanentBreakAdd ?? 0) + f.value;
+        applied.push(f.value > 0 ? '道心通明' : '道心蒙尘');
+        break;
+      case 'debuff': {
+        const existing = state.debuffs.find((d) => d.id === f.id);
+        if (existing) existing.remaining += f.years;
+        else state.debuffs.push({ id: f.id, name: f.name, remaining: f.years });
+        applied.push(`染上${f.name}`);
+        break;
+      }
+      case 'cureDebuff':
+        state.debuffs = state.debuffs.filter((d) => d.id !== f.id);
+        applied.push('沉疴尽去');
+        break;
+      case 'gongfa': {
+        const art = GONGFA[f.id];
+        state.gongfaId = f.id;
+        applied.push(art ? `改修《${art.name}》` : '易主修功法');
+        break;
+      }
+      case 'shentong': {
+        const power = SHENTONG.find((x) => x.id === f.id);
+        if (state.shentongIds.includes(f.id)) {
+          state.cultivation += need * DUP_SHENTONG_COMPENSATION;
+          applied.push('故技重温，聊补修为');
+        } else {
+          state.shentongIds.push(f.id);
+          applied.push(power ? `习得「${power.name}」` : '习得神通');
+        }
+        break;
+      }
+      case 'luck':
+        state.luck = (state.luck ?? 0) + f.value;
+        applied.push(f.value > 0 ? '气运加身' : '气运折损');
+        break;
+      default:
+        break;
+    }
+  }
+
+  state.age = Math.max(0, state.age);
+  state.pendingEventId = null;
+  state.eventsSeen = (state.eventsSeen ?? 0) + 1;
+  state.recentEventIds = [...(state.recentEventIds ?? []), event.id].slice(-RECENT_WINDOW);
+  if (state.age >= lifespanCap(state)) state.dead = true;
+
+  return { applied };
+}
+
+const UPGRADES = {
+  daoji:   { name: '道基深厚', desc: '修炼速度 +5%',       max: 20, unit: 10 },
+  tianxin: { name: '天心通明', desc: '突破成功率加成 +2%', max: 10, unit: 25 },
+  guiling: { name: '龟龄鹤算', desc: '寿元上限 +3%',       max: 15, unit: 20 },
+};
+
+// 第 level+1 级（即从 level 升到 level+1）的道韵成本
+function upgradeCost(key, level) {
+  return UPGRADES[key].unit * (level + 1);
+}
+
+function buyUpgrade(state, key) {
+  const def = UPGRADES[key];
+  if (!def) return false;
+  const level = state.upgrades[key] ?? 0;
+  if (level >= def.max) return false;
+  const cost = upgradeCost(key, level);
+  if ((state.daoyun ?? 0) < cost) return false;
+  state.daoyun -= cost;
+  state.upgrades[key] = level + 1;
+  return true;
+}
+
+// 道消或飞升后开启新的一世：结算道韵，继承永久加成，重抽灵根与天赋
+function reincarnate(state, rnd = Math.random) {
+  return createState(rnd, {
+    daoyun: (state.daoyun ?? 0) + daoyunGain(state),
+    upgrades: { ...state.upgrades },
+    lifetimeCount: (state.lifetimeCount ?? 1) + 1,
+  });
+}
+
+
+// ===== view/log.js =====
+const MAX_LOG_LINES = 200;
+
+function pushLog(state, text) {
+  // 增寿的机缘会让 age 减少，若直接按当时年龄盖戳，编年史会出现「120载 → 119载」
+  // 这种时光倒流。取历史最大值，保证记事按时间单调推进。
+  const last = state.logLines.length > 0 ? state.logLines[state.logLines.length - 1].age : 0;
+  state.logLines.push({ age: Math.max(last, Math.floor(state.age)), text });
+  if (state.logLines.length > MAX_LOG_LINES) {
+    state.logLines.splice(0, state.logLines.length - MAX_LOG_LINES);
+  }
+}
+
+function renderLog(state, el) {
+  if (!el) return;
+  el.innerHTML = state.logLines
+    .slice(-60)
+    .map((l) => `<div class="log-line"><span class="log-age">${l.age}载</span>${l.text}</div>`)
+    .join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+
+// ===== view/modal.js =====
+let currentClose = null;
+
+function openModal({ title, body, actions }) {
+  closeModal();
+  const root = document.getElementById('modal-root');
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">${title}</div>
+      <div class="modal-body">${body}</div>
+      <div class="modal-actions"></div>
+    </div>`;
+  const actionBox = mask.querySelector('.modal-actions');
+  actions.forEach((a, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'modal-btn';
+    btn.textContent = a.label;
+    btn.addEventListener('click', () => { closeModal(); a.onClick(i); });
+    actionBox.appendChild(btn);
+  });
+  root.appendChild(mask);
+  currentClose = () => mask.remove();
+}
+
+function closeModal() {
+  if (currentClose) { currentClose(); currentClose = null; }
+}
+
+function isModalOpen() {
+  return currentClose !== null;
+}
+
+
+// ===== view/render.js =====
+const $ = (id) => document.getElementById(id);
+
+// 后期单层修为需求上亿（req(35) ≈ 4.6e8），原样打印会把数字撑出圆环，
+// 所以按中文习惯折成万 / 亿。一万以下保持精确，前期玩家仍能看清每一点进度。
+// 千万量级砍掉小数位：最宽的一行「1198万 / 1377万」才留得住环内两侧的余量。
+function formatCult(n) {
+  const v = Math.floor(n);
+  const a = Math.abs(v);
+  if (a < 1e4) return String(v);
+  if (a < 1e7) return `${(v / 1e4).toFixed(1)}万`;
+  if (a < 1e8) return `${(v / 1e4).toFixed(0)}万`;
+  return `${(v / 1e8).toFixed(2)}亿`;
+}
+
+// 速率前期要看清小数（8.3 修为/载），后期同样得折算，否则是 67688.1 这种读不动的数
+function formatRate(n) {
+  return Math.abs(n) < 1e4 ? n.toFixed(1) : formatCult(n);
+}
+
+// 没有「神识内视」时只给模糊描述，把信息本身做成奖励
+function chanceLabel(state) {
+  const p = breakthroughChance(state);
+  if (hasShentong(state, 'neishi')) return `成功率 ${(p * 100).toFixed(1)}%`;
+  if (p >= 0.8) return '十拿九稳';
+  if (p >= 0.6) return '似有七分把握';
+  if (p >= 0.4) return '成败各半';
+  if (p >= 0.2) return '凶多吉少';
+  return '九死一生';
+}
+
+function render(state) {
+  const realm = REALMS[state.realm];
+  $('dao-hao').textContent = state.daoHao;
+  $('realm-name').textContent = state.ascended ? '已飞升' : `${realm.name} · ${SUB_NAMES[state.sub]}`;
+
+  const cap = lifespanCap(state);
+  const capText = Number.isFinite(cap) ? Math.floor(cap) : '∞';
+  $('age-text').textContent = `${Math.floor(state.age)} / ${capText} 载`;
+  $('luck-text').textContent = `气运 ${state.luck ?? 0}`;
+  const lifeRatio = Number.isFinite(cap) ? Math.min(1, state.age / cap) : 0;
+  $('life-fill').style.width = `${lifeRatio * 100}%`;
+  $('life-bar').classList.toggle('urgent', lifeRatio > 0.85);
+
+  const need = req(levelIndex(state.realm, state.sub));
+  const ratio = Math.min(1, state.cultivation / need);
+  const ringFill = $('ring-fill');
+  const circumference = 2 * Math.PI * 96;
+  ringFill.style.strokeDasharray = String(circumference);
+  ringFill.style.strokeDashoffset = String(circumference * (1 - ratio));
+  $('ring-aura').classList.toggle('overflowing', state.cultivation > need);
+  $('cult-text').textContent = `${formatCult(state.cultivation)} / ${formatCult(need)}`;
+  $('rate-text').textContent = `${formatRate(cultivationRate(state))} 修为/载`;
+
+  const overflow = Math.max(0, state.cultivation - need);
+  const bonus = overflowBonus(state);
+  $('overflow-text').textContent = overflow > 0
+    ? `溢出 ${(overflow / need).toFixed(2)} 倍　突破 +${(bonus * 100).toFixed(0)}%${bonus >= 0.30 ? '（已封顶）' : ''}`
+    : '';
+
+  const btn = $('breakthrough-btn');
+  const ready = canBreakthrough(state);
+  btn.disabled = !ready;
+  btn.classList.toggle('ready', ready);
+  btn.textContent = ready ? `突 破（${chanceLabel(state)}）` : '修为未足';
+
+  const spirit = findSpirit(state.spiritId);
+  $('spirit-panel').innerHTML = `<div class="panel-title">灵根</div>
+    <div class="tag tag-${spirit.id}">${(state.elements ?? []).join('')}${spirit.name}</div>
+    <div class="panel-desc">${spirit.desc}</div>`;
+
+  $('talent-panel').innerHTML = `<div class="panel-title">天赋</div>` +
+    state.talentIds.map((id) => {
+      const t = TALENTS.find((x) => x.id === id);
+      return t ? `<div class="tag">${t.name}</div><div class="panel-desc">${t.desc}</div>` : '';
+    }).join('');
+
+  const g = GONGFA[state.gongfaId];
+  $('gongfa-panel').innerHTML = `<div class="panel-title">功法</div>
+    <div class="tag tier-${g.tier}">${g.tier}阶 · ${g.name}</div>
+    <div class="panel-desc">${g.desc}</div>`;
+
+  $('shentong-panel').innerHTML = `<div class="panel-title">神通</div>` +
+    (state.shentongIds.length === 0
+      ? '<div class="panel-desc">尚无</div>'
+      : state.shentongIds.map((id) => {
+          const s = SHENTONG.find((x) => x.id === id);
+          return s ? `<div class="tag">${s.name}</div>` : '';
+        }).join(''));
+
+  $('debuff-panel').innerHTML = state.debuffs.length === 0
+    ? ''
+    : `<div class="panel-title">状态</div>` +
+      state.debuffs.map((d) => `<div class="tag danger">${d.name ?? d.id}（余 ${Math.ceil(d.remaining)} 载）</div>`).join('');
+
+  renderLog(state, $('log-panel'));
+}
+
+
+// ===== main.js =====
+let game = null;
+let lastFrame = 0;
+let endingShown = false;
+let speedMultiplier = 1;
+
+function upgradeRows() {
+  return Object.keys(UPGRADES).map((key) => {
+    const def = UPGRADES[key];
+    const lv = game.upgrades[key] ?? 0;
+    const maxed = lv >= def.max;
+    const cost = maxed ? '—' : upgradeCost(key, lv);
+    return `<div class="upgrade-row">
+      <span>${def.name} <small>${def.desc}</small></span>
+      <span>Lv.${lv}/${def.max}</span>
+      <button class="upgrade-btn" data-key="${key}" ${maxed ? 'disabled' : ''}>${cost}</button>
+    </div>`;
+  }).join('');
+}
+
+// 道韵在这里一次性发放，因此转世按钮直接构造新状态，
+// 不能调 reincarnate ——那个函数内部会再算一次 daoyunGain，等于双倍发放。
+//
+// daoyunSettled 标记同样是防重复发放：玩家道消后自动存档会把「已死 + 已加道韵」
+// 的状态写进 localStorage，此时刷新页面，loop 会再次看到 dead 并调用本函数。
+// 没有这个标记的话，玩家每刷新一次就白拿一次道韵。
+function showEnding() {
+  endingShown = true;
+  const gained = daoyunGain(game);
+  if (!game.daoyunSettled) {
+    game.daoyun = (game.daoyun ?? 0) + gained;
+    game.daoyunSettled = true;
+  }
+
+  const ascended = game.ascended;
+  const summary = ascended ? '证道飞升' : `止步 ${REALMS[game.realm].name}`;
+
+  openModal({
+    title: ascended ? '白日飞升' : '道消身殒',
+    body: `<p class="event-text">${ascended
+      ? '天门洞开，紫气三万里。你回望人间一眼，终究没有再留。'
+      : '灯枯油尽，神魂散于天地之间。世上再无你这一号人物。'}</p>
+      <p class="event-text">第 ${game.lifetimeCount} 世 · ${summary} · 享年 ${Math.floor(game.age)} 载 · 历机缘劫难 ${game.eventsSeen} 次</p>
+      <p class="event-text">此世凝得道韵 <b>${gained}</b> 点，可用 <b id="daoyun-left">${game.daoyun}</b> 点。</p>
+      <div id="upgrade-box">${upgradeRows()}</div>`,
+    actions: [{ label: '转世重修', onClick: () => {
+      clearSave();
+      game = createState(Math.random, {
+        daoyun: game.daoyun,
+        upgrades: { ...game.upgrades },
+        lifetimeCount: (game.lifetimeCount ?? 1) + 1,
+      });
+      endingShown = false;
+      pushLog(game, `第 ${game.lifetimeCount} 世。前尘尽忘，唯余一缕道韵萦绕神魂。`);
+      saveGame(game);
+      render(game);
+    } }],
+  });
+
+  // 结算面板里当场花道韵，买完重绘保持数字同步
+  const box = document.getElementById('upgrade-box');
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('.upgrade-btn');
+    if (!btn) return;
+    if (!buyUpgrade(game, btn.dataset.key)) return;
+    box.innerHTML = upgradeRows();
+    document.getElementById('daoyun-left').textContent = String(game.daoyun);
+  });
+}
+
+function onBreakthrough() {
+  if (!canBreakthrough(game)) return;
+  const before = REALMS[game.realm].name;
+  const result = attemptBreakthrough(game);
+  if (result.success) {
+    if (game.ascended) pushLog(game, '天门洞开，万道垂青。你一步踏出，自此不在五行中。');
+    else pushLog(game, `${before}圆满，天雷加身而不溃。你已入${REALMS[game.realm].name}之境。`);
+  } else {
+    const hurt = game.debuffs.some((d) => d.id === 'daoji');
+    pushLog(game, `冲击${before}壁障失败，真气倒流${hurt ? '，道基受损' : '，幸而道心未损'}，平白折去 ${Math.round(result.lifeCost)} 载阳寿。`);
+    if (result.died) pushLog(game, '你终究没能撑过这一劫。');
+  }
+  render(game);
+}
+
+function showPendingEvent() {
+  const event = findEvent(game.pendingEventId);
+  if (!event) { game.pendingEventId = null; return; }
+  openModal({
+    title: event.title,
+    body: `<p class="event-text">${event.text}</p>`,
+    actions: event.options.map((o) => ({
+      label: o.label,
+      onClick: (i) => {
+        const r = resolveEvent(game, event, i);
+        pushLog(game, `【${event.title}】你选择了「${o.label}」。${r.applied.join('，') || '此事就此揭过。'}`);
+        if (game.dead) pushLog(game, '你的道途，止步于此。');
+        render(game);
+      },
+    })),
+  });
+}
+
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (!lastFrame) lastFrame = now;
+  const dt = Math.min(1, (now - lastFrame) / 1000);
+  lastFrame = now;
+
+  const prevLevel = game.realm * 4 + game.sub;
+  tick(game, dt * speedMultiplier);
+  if (game.realm * 4 + game.sub > prevLevel) {
+    pushLog(game, `你于青石之上枯坐多载，忽觉丹田一暖，已入${REALMS[game.realm].name}${SUB_NAMES[game.sub]}。`);
+  }
+  if ((game.dead || game.ascended) && !endingShown) showEnding();
+  // 死亡必须先于事件判定：同一个 tick 步里可能既触发事件又寿元耗尽，
+  // 此时 pendingEventId 仍留在 state 上。若先弹事件，玩家会看到弹窗闪一下
+  // 又被结局弹窗顶掉。死人没有待抉择的事。
+  if (game.dead || game.ascended) game.pendingEventId = null;
+  else if (game.pendingEventId && !isModalOpen()) showPendingEvent();
+  render(game);
+  renderDebugStats();
+}
+
+const SAVE_INTERVAL_MS = 5000;
+
+function showOfflineSummary(offline) {
+  if (offline.years < 1) return;
+  const truncNote = offline.truncated
+    ? '<p class="event-text">你自觉寿元将尽，未敢再入定，遂出关。</p>'
+    : '';
+  openModal({
+    title: '闭关归来',
+    body: `<p class="event-text">你自定中醒转，恍如隔世。此番闭关，历时 <b>${Math.floor(offline.years)}</b> 载，
+      修为增益 <b>${Math.floor(offline.cultivationGained)}</b>${offline.levelsGained > 0 ? `，境界精进 <b>${offline.levelsGained}</b> 重` : ''}。</p>${truncNote}`,
+    actions: [{ label: '继续修行', onClick: () => {} }],
+  });
+}
+
+// 调试面板随生产构建一同发布：这游戏一轮裸奔要跑三个多小时，
+// 没有倍速和状态直改，数值平衡根本没法复核。默认 hidden，按 ~ 才现身。
+function setupDebugPanel() {
+  const panel = document.getElementById('debug-panel');
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '`' || e.key === '~') panel.hidden = !panel.hidden;
+  });
+  document.getElementById('debug-speed').addEventListener('input', (e) => {
+    speedMultiplier = Math.max(1, Number(e.target.value) || 1);
+  });
+  document.getElementById('debug-fill').addEventListener('click', () => {
+    game.cultivation = req(levelIndex(game.realm, game.sub));
+    render(game);
+  });
+  document.getElementById('debug-event').addEventListener('click', () => {
+    game.pendingEventId = pickEvent(game);
+  });
+  document.getElementById('debug-realm').addEventListener('click', () => {
+    if (game.realm < 8) { game.realm += 1; game.sub = 0; game.cultivation = 0; render(game); }
+  });
+  document.getElementById('debug-age').addEventListener('click', () => {
+    game.age = lifespanCap(game) * 0.8;
+    render(game);
+  });
+  document.getElementById('debug-reset').addEventListener('click', () => {
+    // 必须先关弹层再换 game。modal 模块的 currentClose 是模块级单例，清档时若有
+    // 事件/结局弹层挂着，它不会自己消失：isModalOpen() 会一直为真，loop 里
+    // 「pendingEventId && !isModalOpen()」就再也进不去，新角色抽到的事件只会
+    // 静静躺在 state 里把 tick 冻住，界面上却没有任何弹层可点。更糟的是那个
+    // 残留弹层的选项闭包捕获的是上一世的 event，点下去会把上一世的机缘结算到
+    // 新角色头上（实测：新号 recentEventIds 里出现了上一世的事件 id）。
+    closeModal();
+    clearSave();
+    game = createState();
+    endingShown = false;
+    render(game);
+  });
+}
+
+function renderDebugStats() {
+  const panel = document.getElementById('debug-panel');
+  if (panel.hidden) return;
+  document.getElementById('debug-stats').innerHTML =
+    `等级序号 ${levelIndex(game.realm, game.sub)}｜速率 ${cultivationRate(game).toFixed(1)}` +
+    `｜突破率 ${(breakthroughChance(game) * 100).toFixed(1)}%｜寿限 ${Math.floor(lifespanCap(game))}` +
+    `｜下次事件 ${game.nextEventIn.toFixed(1)}`;
+}
+
+function boot() {
+  const loaded = loadGame();
+  if (loaded) {
+    game = loaded.state;
+    render(game);
+    showOfflineSummary(loaded.offline);
+  } else {
+    game = createState();
+    pushLog(game, '你自幼被弃于山门之外，十六岁那年，终得引气入体。');
+  }
+
+  document.getElementById('breakthrough-btn').addEventListener('click', onBreakthrough);
+  setupDebugPanel();
+  setInterval(() => saveGame(game), SAVE_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(game); });
+  window.addEventListener('beforeunload', () => saveGame(game));
+
+  render(game);
+  requestAnimationFrame(loop);
+}
+
+if (typeof document !== 'undefined') boot();
+
+</script>
+</body>
+</html>
