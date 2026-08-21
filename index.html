@@ -50,6 +50,11 @@ body {
 .bar { height: 6px; background: #241d16; border: 1px solid var(--gold-dim); flex: 1; min-width: 120px; }
 .fill { height: 100%; background: var(--gold); transition: width 120ms linear; }
 #life-bar.urgent .fill { background: var(--danger); animation: pulse 1.2s infinite; }
+/* 运功时寿元条开始「烧」：四倍的代价必须和三倍的收益一样显眼，界面不能只报喜。
+   与 .urgent（寿元将尽，整条转红闪烁）刻意区分——这里只在金色填充上压一道红辉光、
+   边框转红，说的是「正在飞快消耗」而不是「快没了」。两者可以同时成立，各说各的。 */
+#life-bar.burning { border-color: var(--danger); }
+#life-bar.burning .fill { box-shadow: 0 0 10px rgba(168,50,42,0.95); }
 @keyframes pulse { 50% { opacity: 0.45; } }
 #stage { text-align: center; padding: 24px 0; }
 
@@ -77,6 +82,20 @@ body {
 }
 .ring-aura.overflowing {
   stroke: rgba(201,162,39,0.75); stroke-width: 1.5; animation-duration: 3s;
+}
+/* 运功时灵气环急转。0.8 秒一圈是刻意挑的：12 秒（常态）与 3 秒（溢出）看着都还像
+   「在转」，0.8 秒才像「在冲」，两种状态一眼可辨。选择器带 id，特异性天然压过
+   .ring-aura.overflowing——溢出与运功同时成立时以运功为先，它是此刻正在发生的事。 */
+#cult-ring.boosting .ring-aura {
+  stroke: rgba(201,162,39,0.9); stroke-width: 2; animation-duration: 0.8s;
+  filter: drop-shadow(0 0 6px rgba(201,162,39,0.55));
+}
+/* 打坐的人呼吸也跟着急起来：4 秒一息 → 0.9 秒一息 */
+#cult-ring.boosting #meditator { animation-duration: 0.9s; }
+/* 速率数字亮起来。数值本身已经 ×3 跳变，这一下只是给那次跳变一个由头，
+   否则玩家会以为自己看错了 */
+#cult-ring.boosting #rate-text {
+  opacity: 1; color: var(--gold); text-shadow: 0 0 10px rgba(201,162,39,0.5);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .fig { fill: var(--gold-dim); stroke: var(--ink); stroke-width: 1.6; }
@@ -108,8 +127,9 @@ body {
   box-shadow: 0 0 12px rgba(201,162,39,0.5); animation: pulse 1.6s infinite;
 }
 /* ===== 心法姿态条 ===== */
-/* auto-fit 一条规则吃下两种布局：桌面 #stage 约 496px 宽，五个一排恰好排满；
-   手机 375px 下自动折成三列，每格仍有 110px 上下，够得着 44px 触摸目标。 */
+/* auto-fit 一条规则吃下两种布局：心法砍到两门之后，空轨道被 auto-fit 收掉、1fr 把余量
+   分给剩下两格，于是桌面（#stage 约 496px）与手机 375px 下都是各占一半的两个大格子，
+   远超 44px 触摸目标。将来若再添一门，这条规则不用改。 */
 #stance-bar {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 6px; margin-top: 18px;
@@ -140,6 +160,50 @@ body {
   margin-top: 8px; min-height: 36px; font-size: 12px; line-height: 1.5;
   color: var(--gold-dim); letter-spacing: 0.5px;
 }
+
+/* ===== 长按运功 ===== */
+/* 全游戏唯一需要「按住不放」的控件，所以做得比心法按钮更大更实：整条 52px 高的横条
+   都是触摸目标（手机上 56px），名字与标注并排居中——按住的时候眼睛在圆环上，
+   按钮只需要一个够大、不用瞄的落点。
+   下面三条移动端属性都是必需的，缺一条长按就会被系统抢走：
+     touch-action: manipulation   去掉 300ms 点击延迟与双击缩放（连点会被认成缩放手势）
+     user-select: none            长按不要把「运功」二字选中、不要弹出文本选择手柄
+     -webkit-touch-callout: none  iOS 长按不要弹系统菜单——那会当场打断加速 */
+#boost-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 52px; margin-top: 12px; padding: 8px 12px;
+  font-family: inherit; font-size: 16px; line-height: 1.3;
+  background: transparent; color: var(--gold-dim);
+  border: 1px solid var(--gold-dim); cursor: pointer;
+  touch-action: manipulation;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: color 100ms, border-color 100ms, background 100ms, box-shadow 100ms;
+}
+.boost-name { letter-spacing: 4px; }
+.boost-stats {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0 6px;
+  font-size: 11px; opacity: 0.75; font-variant-numeric: tabular-nums;
+}
+/* 换行只在数值之间发生，「寿耗×4」自己不能被拦腰截断 */
+.boost-stats span { white-space: nowrap; }
+#boost-btn:hover { color: var(--gold); border-color: var(--gold); background: rgba(201,162,39,0.06); }
+/* 按住时：金线 + 双重辉光 + 微微下沉，指头底下要有「按实了」的实感。刻意与心法的
+   .active 拉开距离——那是个常驻状态，这是此刻正在发生的事，所以它会自己呼吸。
+   呼吸用专门的 boost-glow 而不是复用 pulse：pulse 改的是整体 opacity，会把金线和
+   字一起压暗，按住时反而像在闪断；这里只让辉光张缩，字始终读得清。 */
+#boost-btn.boosting {
+  color: var(--gold); border-color: var(--gold); background: rgba(201,162,39,0.18);
+  box-shadow: 0 0 16px rgba(201,162,39,0.55), inset 0 0 14px rgba(201,162,39,0.14);
+  transform: translateY(1px);
+  animation: boost-glow 0.7s ease-in-out infinite;
+}
+@keyframes boost-glow {
+  50% { box-shadow: 0 0 26px rgba(201,162,39,0.85), inset 0 0 20px rgba(201,162,39,0.24); }
+}
+#boost-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* 键盘可达：聚焦后按住空格 / 回车同样能行功，焦点圈必须看得见 */
+#boost-btn:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
+#boost-note { margin-top: 6px; font-size: 11px; opacity: 0.55; letter-spacing: 0.5px; }
 
 /* ===== 丹房 ===== */
 /* 面板在 #stage 内部（居中排版的地盘），这里把文字掰回左对齐：
@@ -316,10 +380,14 @@ body {
   .modal-btn { padding: 14px 10px; font-size: 15px; }
   #breakthrough-btn { padding: 14px 32px; }
   /* 心法条留在 #stage 内部，随 order:1 跟着突破按钮走，不会掉到日志之后。
-     这里只把触摸目标放大：三列布局下每格 48px 高、间距拉到 8px，防误触。 */
+     这里只把触摸目标放大：两格各占一半宽、48px 高，间距拉到 8px 防误触。 */
   #stance-bar { gap: 8px; margin-top: 14px; }
   .stance-btn { min-height: 48px; font-size: 15px; }
   #stance-desc { min-height: 40px; }
+  /* 运功按钮同样留在 #stage 内部，随 order:1 跟着突破按钮走。这里只放大触摸目标：
+     56px 高，远超 44px 的下限——它是唯一要按住不放的控件，手指落点得宽裕，
+     且滑动中途也不能脱靶（真脱靶了也有 setPointerCapture 兜着，见 main.js） */
+  #boost-btn { min-height: 56px; margin-top: 10px; font-size: 17px; }
   /* 丹房同样留在 #stage 内部，随 order:1 跟着突破按钮走。这里只放大触摸目标：
      每行 48px 高、行距拉到 6px 防误触——炼错一颗就是几十枚灵材白扔 */
   #pill-panel { margin-top: 14px; }
@@ -400,6 +468,15 @@ button, .modal-btn, .upgrade-btn { touch-action: manipulation; }
            一起走，才不会掉到日志后面去。 -->
       <div id="stance-bar" role="group" aria-label="心法姿态"></div>
       <div id="stance-desc"></div>
+      <!-- 长按运功。刻意做成一个动作而不是一门心法：按住则快，松手即停，不留心智负担。
+           摆在心法条正下方，因为它与心法相乘——上面选的是「常态怎么修」，这里是
+           「此刻冲一下」。同样留在 #stage 内部，随 order:1 跟着突破按钮走。
+           按钮上的两个数字由 render 从常量现算，这里不写死。 -->
+      <button type="button" id="boost-btn">
+        <span class="boost-name">运 功</span>
+        <span class="boost-stats" id="boost-stats"></span>
+      </button>
+      <div id="boost-note">按住即行功，松手即止</div>
       <!-- 丹房。同样刻意留在 #stage 内部：炼丹是操作而非参考，手机端要跟着
            突破按钮一起走，不能掉到日志后面去。金丹之前 render 会把它整个 hidden。
            灵材数额在顶栏已有一份，这里再挂一份——决定「炼哪一颗」时眼睛正落在这，
@@ -1748,29 +1825,37 @@ function findEvent(id) {
 // ===== data/stances.js =====
 // 心法姿态：随时可切，无冷却、无消耗。同一时刻只能行一门，机会成本本身就是抉择。
 //
-// 四门而非从前的五门：「静观天机」（事件频率那档）已删除——那条轴在天赋（气运之子）、
-// 功法（大梦千秋、听潮引）、神通（缩地成寸、顺风耳）里都还有表达，心法专注在
-// 修炼速率 / 突破率 / 寿元三维上，把差别拉大到玩家一眼能看出「在冲刺」。
+// 两门而非从前的四门。这一版砍掉了「烈火行功」与「抱元守一」，各有各的理由：
 //
-// rate 乘修炼速率，breakAdd 进突破的加法桶，age 乘寿元消耗速度。
+//   烈火行功本该是个动作，不是一个模式。玩家想「冲一下」，得先点一个档位、事后还要记着
+//   切回来，冲刺这件事凭空背上一身心智负担。它已改成长按运功（BOOST_RATE_MULT /
+//   BOOST_AGE_MULT，见 logic/formulas.js）：想快就按住，松手即停，且与心法相乘而非替代。
+//
+//   抱元守一必须删。它的 breakAdd 只读「按下突破那一刻」的心法，而切心法零成本零冷却，
+//   于是最优解永远是全程行别的心法、突破前一瞬间才切过去——对懂技巧的人是免费的 +30%，
+//   对不懂的人是实打实的半速负担。突破前的准备手段还剩两个（溢出攒修为 +30 个百分点、
+//   固元丹 +12 个百分点），删掉它不缺表达。
+//
+// breakAdd 这一列随抱元守一整体删除，没有留成全 0 的死代码：留着的话，下一个人会以为
+// 心法还有突破这一维，而 breakthroughChance 里早已不再向心法求和。
+//
+// 于是心法只剩「修炼速率 / 寿元」两维：rate 乘修炼速率，age 乘寿元消耗速度。
 // 关键在 rate / age 这一列的比值——它就是「每一点寿元换来多少修为」：
-//   胎息 2.67（0.4/0.15）最高，因 rate 最低而真实耗时最长，是寿元见底时的唯一活路；
-//   烈火 0.75（3.0/4.0）虽不是最低，却是全表最快——它换的是真实时间而非寿元效率：
-//   一层的耗时砍到三分之一，代价是寿元消耗涨到四倍。
-// 挂机游戏里玩家的现实时间不值钱、寿元才是硬约束，所以这两门是真正对立的选择，
-// 而非强弱之分。改动任一数值前先跑 tests/stances.test.mjs 里的效率关系用例。
+//   平心静气 1.0 是基准；胎息 2.67（0.4/0.15）最高，因 rate 最低而真实耗时最长，
+//   是寿元见底时的唯一活路。长按运功自己的比值是 0.75（3.0/4.0），与心法相乘之后
+//   「胎息 + 运功」得 2.0——比胎息省得少、比平心静气省得多。那个中间档是刻意留的
+//   组合空间：平心静气里运功最快，胎息里运功慢但省寿元。
+// 改动任一数值前先跑 tests/stances.test.mjs 里的效率关系用例。
 const STANCES = {
-  pingxin:  { id: 'pingxin',  name: '平心静气', rate: 1.0, breakAdd: 0,     age: 1.0,  desc: '不疾不徐，无过无不及，守常而已' },
-  liehuo:   { id: 'liehuo',   name: '烈火行功', rate: 3.0, breakAdd: -0.20, age: 4.0,  desc: '气行如焚，进境极速，然折寿亦速' },
-  baoyuan:  { id: 'baoyuan',  name: '抱元守一', rate: 0.5, breakAdd: 0.30,  age: 1.0,  desc: '敛气归元，进境迟缓，而冲关时根基最稳' },
-  taixi:    { id: 'taixi',    name: '胎息',     rate: 0.4, breakAdd: 0,     age: 0.15, desc: '息如未生，最省寿元，然功成须以光阴相抵' },
+  pingxin: { id: 'pingxin', name: '平心静气', rate: 1.0, age: 1.0,  desc: '不疾不徐，无过无不及，守常而已' },
+  taixi:   { id: 'taixi',   name: '胎息',     rate: 0.4, age: 0.15, desc: '息如未生，最省寿元，然功成须以光阴相抵' },
 };
 
-// 未知 id 一律回退到平心静气：老存档没有这个字段，坏值也不该让四条公式返回 NaN。
-// 这条路也接住了被删掉的旧心法——老存档里存的 'jingguan' 现在就是一个普通的未知 id，
-// 不需要专门的迁移代码，走这条回退路径即可。
+// 未知 id 一律回退到平心静气：老存档没有这个字段，坏值也不该让公式返回 NaN。
+// 这条路也接住了所有被删掉的旧心法——老存档里存的 'liehuo' / 'baoyuan' / 'jingguan'
+// 现在都只是普通的未知 id，不需要专门的迁移代码，走这条回退路径即可。
 // 用 hasOwn 而非 `STANCES[id] ?? 默认值`——后者遇到 'constructor'、'toString' 这类
-// 原型链上的键会返回一个函数，四条公式随即算出 NaN，整局静默烂掉。
+// 原型链上的键会返回一个函数，公式随即算出 NaN，整局静默烂掉。
 function findStance(id) {
   return Object.hasOwn(STANCES, id) ? STANCES[id] : STANCES.pingxin;
 }
@@ -2151,16 +2236,32 @@ function layerYears(state) {
   return levelSeconds(levelIndex(state.realm, 0)) * SECRET_LAYER_TIME_FACTOR;
 }
 
+// ===== 长按运功 =====
+//
+// 「运功」是个动作，不是一门心法：手指按住的这段时间里修炼速率 ×3、寿元消耗 ×4。
+// 它自带节流，所以刻意不加冷却、不加资源条——手按不了太久，而寿元正以四倍在烧。
+//
+// 与心法相乘而非替代，这是刻意留的组合空间：平心静气里运功最快（×3.0 速 / ×4.0 寿耗），
+// 胎息里运功慢但省寿元（0.4×3.0 = ×1.2 速 / 0.15×4.0 = ×0.6 寿耗，效率 2.0）。
+// 两个乘数各自独立，谁也不覆盖谁——秘境探层的 ×0.4 同理，运功是在那个惩罚之上再乘。
+//
+// state.boosting 是纯粹的输入设备状态，绝不进存档：serialize 归零、deserialize 强制为
+// false（见 logic/state.js）。存着「正在运功」的档一旦重载，玩家会在没人按住按钮的
+// 情况下按四倍烧寿元，而离线结算走的正是同一条 tick。
+const BOOST_RATE_MULT = 3.0;
+const BOOST_AGE_MULT = 4.0;
+
 // 心法 rate 是独立乘数，落在加法桶的地板夹取之外：
 // 那个 0.1 地板保的是「加法修正堆到 −100% 也别归零」，而主动切心法是玩家自己的选择，
 // 不该被那道保险托底
 //
-// 探索惩罚同样是乘数、同样落在地板之外：它是玩家自己按下出发键换来的，
+// 探索惩罚与长按运功同样是乘数、同样落在地板之外：它们都是玩家自己按下按钮换来的，
 // 和心法一样属于「主动选择的代价」，不该被那道保险托底。
 function cultivationRate(state) {
   const n = levelIndex(state.realm, state.sub);
   const spirit = findSpirit(state.spiritId);
   return baseRate(n) * spirit.mult * gongfaMult(state) * findStance(state.stanceId).rate
+    * (state.boosting ? BOOST_RATE_MULT : 1)
     * Math.max(0.1, 1 + rateAdditive(state))
     * (isExploring(state) ? EXPEDITION_RATE_MULT : 1);
 }
@@ -2188,13 +2289,15 @@ function overflowBonus(state) {
   return Math.min(0.30, Math.floor(extra / need) * 0.15);
 }
 
+// 心法不在这条公式里出现，也不该再出现：担着这一维的「抱元守一」已随 breakAdd 字段
+// 一并删除（理由见 data/stances.js）。突破前的准备手段只剩溢出攒修为与固元丹两样，
+// 它们都是「事先付出代价」，而切心法零成本零冷却——那正是必须把它请出这条公式的原因。
 function breakthroughChance(state) {
   const g = GONGFA[state.gongfaId] ?? GONGFA.yinqi;
   const add = findSpirit(state.spiritId).breakAdd
     + sumField(stateTalents(state), 'breakAdd')
     + sumField(stateShentong(state), 'breakAdd')
     + (g.breakAdd ?? 0)
-    + findStance(state.stanceId).breakAdd
     + (state.upgrades?.tianxin ?? 0) * 0.02
     + (state.permanentBreakAdd ?? 0);
   // 固元丹的加成必须留在乘法之外、与 overflowBonus 同列相加，按百分点计——
@@ -2228,8 +2331,12 @@ function intervalModifier(state) {
 
 // 寿元消耗速度倍率。龟息功与心法相乘：两者都是「呼吸慢下来」的同一件事，
 // 相加会让胎息 + 龟息越界为负（1 − 0.85 − 0.25 = −0.10），相乘才是 0.15 × 0.75 = 0.1125
+//
+// 长按运功同样相乘、同样是同一件事的反面（呼吸急起来）：胎息里运功是 0.15 × 4.0 = 0.6，
+// 仍比平心静气省，这正是那个组合成立的地方。
 function ageRate(state) {
-  return (hasShentong(state, 'guixi') ? 0.75 : 1) * findStance(state.stanceId).age;
+  return (hasShentong(state, 'guixi') ? 0.75 : 1) * findStance(state.stanceId).age
+    * (state.boosting ? BOOST_AGE_MULT : 1);
 }
 
 // 道消 / 飞升时结算的道韵
@@ -2291,6 +2398,9 @@ function createState(rnd = Math.random, carry = {}) {
     talentIds: rollTalents(rnd),
     gongfaId: 'yinqi',
     stanceId: 'pingxin',
+    // 长按运功。纯粹的输入设备状态——手指按住时为真，松手即假，绝不进存档
+    // （见 serialize / deserialize）。它与 stanceId 相乘而非替代，见 formulas.cultivationRate。
+    boosting: false,
     shentongIds: [],
     debuffs: [],
     permanentBreakAdd: 0,
@@ -2326,8 +2436,11 @@ function createState(rnd = Math.random, carry = {}) {
   };
 }
 
+// boosting 在写入侧就归零：存档是「世界的样子」，而「手指正按着按钮」不是世界的一部分。
+// 自动存档每 5 秒一次，玩家按住运功时必定会撞上一次，写进去的就是一句谎话。
+// 真正的保险在 deserialize 那一侧（读入侧才是唯一的收口，见那里的注释）。
 function serialize(state) {
-  return JSON.stringify(state);
+  return JSON.stringify({ ...state, boosting: false });
 }
 
 // 反序列化失败、版本不匹配、关键字段越界，一律返回 null，由调用方开新档。
@@ -2359,6 +2472,12 @@ function deserialize(json) {
     if (data[key] === undefined) data[key] = 0;
     else if (!Number.isFinite(data[key])) return null;
   }
+  // 长按运功绝不从存档恢复，无条件强制为 false——这一条是硬性的，不是防御性冗余。
+  // 存着「正在运功」的档一旦重载，玩家会在没有任何人按住按钮的情况下按 ×4 烧寿元，
+  // 而且 loadGame 紧接着就跑 applyOffline（走的是同一条 tick），离线那几小时会被
+  // 一并按四倍结算，回来人就没了。写入侧已经归零，这里是读入侧的收口：它同时接住
+  // 任何绕过 serialize 写出来的档（手改 localStorage、旧构建、将来某条忘了归零的路径）。
+  data.boosting = false;
   // 秘境同样是后加的字段：老存档里没有，缺席一律补 null（人在山中打坐），不作废整档。
   if (data.expedition === undefined) data.expedition = null;
   if (data.expeditionResult === undefined) data.expeditionResult = null;
@@ -3166,8 +3285,13 @@ function stanceStats(s) {
   const parts = [];
   if (s.rate !== 1) parts.push(`速×${s.rate}`);
   if (s.age !== 1) parts.push(`寿耗×${s.age}`);
-  if (s.breakAdd !== 0) parts.push(`破${s.breakAdd > 0 ? '+' : '−'}${Math.round(Math.abs(s.breakAdd) * 100)}%`);
   return parts.length > 0 ? parts : ['无偏无倚'];
+}
+
+// 长按运功的标注。同样由常量现算，不另存一份展示文案——这两个数字是玩家决定
+// 「值不值得按下去」的全部依据，写死在 HTML 里迟早与 formulas.js 对不上。
+function boostStats() {
+  return [`速×${BOOST_RATE_MULT}`, `寿耗×${BOOST_AGE_MULT}`];
 }
 
 // ===== 丹房 =====
@@ -3423,6 +3547,33 @@ function renderStances(state) {
   $('stance-desc').textContent = `${current.name}——${current.desc}`;
 }
 
+// ===== 长按运功 =====
+//
+// 按住的这段时间是全游戏唯一的实时反馈时刻，玩家必须当场看见自己在冲。所以反馈一次
+// 给足四处，且全部由 state.boosting 一处驱动（render 每帧跑，按下与松手自动同步，
+// 不需要在事件处理器里另手动改一遍 DOM）：
+//   · 按钮进入激活态（金线 + 辉光 + 微微下沉，像真被按住）
+//   · 灵气环从 12 秒一圈拉到 0.8 秒一圈，肉眼看得见气在转
+//   · 打坐者的呼吸从 4 秒一息急到 0.9 秒一息
+//   · 速率数字亮起来（数值本身 ×3 自动跳变，这里只是让那次跳变有个由头）
+//   · 寿元条同时开始「烧」——四倍的代价必须和三倍的收益一样显眼，不能只报喜
+// 灵气环刻意与 .overflowing（3 秒一圈、金线渐亮）拉开距离：运功是 0.8 秒的急转，
+// 两者同时成立时以运功为先——它是此刻正在发生的事，而溢出是一个已经攒下的状态。
+function renderBoost(state) {
+  const on = !!state.boosting;
+  const btn = $('boost-btn');
+  setStats($('boost-stats'), boostStats());
+  // 读屏必须念得出这是个「按住」的按钮：光有「运功」二字，说不清怎么用、代价多少
+  btn.setAttribute('aria-label',
+    `运功：按住则修炼 ×${BOOST_RATE_MULT}、寿元消耗 ×${BOOST_AGE_MULT}，松手即停`);
+  btn.setAttribute('aria-pressed', String(on));
+  // 道消 / 飞升之后按下去不会有任何事（tick 直接返回），按钮就不该还亮着邀请人来按
+  btn.disabled = !!(state.dead || state.ascended);
+  btn.classList.toggle('boosting', on);
+  $('cult-ring').classList.toggle('boosting', on);
+  $('life-bar').classList.toggle('burning', on);
+}
+
 function render(state) {
   const realm = REALMS[state.realm];
   $('dao-hao').textContent = state.daoHao;
@@ -3464,6 +3615,7 @@ function render(state) {
   btn.textContent = ready ? `突 破（${chanceLabel(state)}）` : '修为未足';
 
   renderStances(state);
+  renderBoost(state);
   renderPills(state);
   $('pill-lingcai').textContent = String(lingcai);
   renderSecret(state);
@@ -3538,6 +3690,9 @@ function upgradeRows() {
 // 没有这个标记的话，玩家每刷新一次就白拿一次道韵。
 function showEnding() {
   endingShown = true;
+  // 道消 / 飞升，手自然就松了。这一刻停加速不为省寿元（tick 对死人直接返回，
+  // 早已不再推进），而是不让结局弹层背后留着一个又亮着辉光、又被 disabled 压暗的按钮
+  stopBoost();
   const gained = daoyunGain(game);
   if (!game.daoyunSettled) {
     game.daoyun = (game.daoyun ?? 0) + gained;
@@ -3610,6 +3765,78 @@ function onStanceClick(e) {
   pushLog(game, `你改行${next.name}，气机骤然一转。`);
   saveGame(game);
   render(game);
+}
+
+// ===== 长按运功 =====
+//
+// 冲刺是个动作，不是一个模式：按住则修炼 ×3、寿元 ×4（与心法相乘，不是替代），松手即停。
+// 它自带节流——手按不了太久，而寿元正以四倍在烧——所以刻意不加冷却、不加资源条。
+//
+// 这套输入的全部难点在「一定要能松开」。漏掉任何一条出口，玩家就会在离开时被四倍烧
+// 寿元，那是这个功能唯一的严重故障模式。所以出口给足五条，且 startBoost / stopBoost
+// 都是幂等的，多收几次无害：
+//   pointerup / pointercancel   正常抬手；以及被系统手势打断（下拉通知栏、来电、三指切屏）
+//   lostpointercapture          捕获被收回（正常抬手后也会到，多一道无害的网）
+//   window 的 blur              切到别的窗口 / 标签页，手指再也回不来
+//   document 的 visibilitychange 转入后台——手机上锁屏、切 App 走的是这条，blur 未必到
+//   window 上再挂一份 pointerup —— 万一 setPointerCapture 没设上，抬手落在了别的元素上
+//
+// 用 Pointer Events 而非 mousedown/mouseup：一套代码同时管住鼠标、手指与触控笔。
+// setPointerCapture 是手机上关键的那一条——手指按住后滑出按钮范围（56px 高的按钮，
+// 拇指很容易滑出去），抬起事件仍会回到按钮身上；不设捕获，那次 pointerup 就落在别的
+// 元素上，玩家会一直在运功。
+function startBoost() {
+  if (!game || game.dead || game.ascended) return;
+  if (game.boosting) return; // 幂等：keydown 会以系统重复率连续触发
+  game.boosting = true;
+  // 不等下一帧：按下去的那一刻就该看见环转起来。速率数字随之 ×3 跳变
+  render(game);
+}
+
+function stopBoost() {
+  if (!game || !game.boosting) return;
+  game.boosting = false;
+  render(game);
+}
+
+function setupBoost() {
+  const btn = document.getElementById('boost-btn');
+
+  btn.addEventListener('pointerdown', (e) => {
+    // 只认主键：鼠标右键长按不该算行功（手指与笔尖的 button 也是 0）
+    if (e.button !== 0) return;
+    // 捕获这枚指针。并非所有情形都给得成（合成事件的 pointerId 在浏览器眼里并不存在，
+    // 会抛 NotFoundError），但捕获失败绝不能连行功都启动不了——退回冒泡路径 +
+    // window 上那份兜底同样收得住。
+    try { btn.setPointerCapture(e.pointerId); } catch { /* 没捕获到，靠 window 兜底 */ }
+    startBoost();
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    btn.addEventListener(type, stopBoost);
+  }
+  window.addEventListener('pointerup', stopBoost);
+  window.addEventListener('pointercancel', stopBoost);
+  // 长按弹出的系统菜单会当场吃掉后续的 pointerup。CSS 的 -webkit-touch-callout 管 iOS，
+  // 这一条管 Android 长按与桌面右键。
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // 键盘可达：聚焦后按住空格 / 回车同样行功，松开即停
+  btn.addEventListener('keydown', (e) => {
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    // 空格默认会滚动页面，且抬起时会合成一次 click——两样都不是我们要的
+    e.preventDefault();
+    if (e.repeat) return; // 重复触发交给 startBoost 的幂等兜住，这里先省掉一串调用
+    startBoost();
+  });
+  btn.addEventListener('keyup', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') stopBoost();
+  });
+  // 焦点一走就停：键盘玩家按住空格时按 Tab 或点别处，keyup 再也不会到这个按钮身上
+  btn.addEventListener('blur', stopBoost);
+  window.addEventListener('blur', stopBoost);
+  // 转入后台就停。这一条与下面那个存档用的 visibilitychange 是两个监听器，各管一件事；
+  // 谁先跑无所谓——serialize 本就把 boosting 归零，存档里不可能留下「正在运功」。
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopBoost(); });
 }
 
 // 炼丹。事件委托挂在容器上而不是按钮上：renderPills 会在寿限变动时整体重建按钮。
@@ -3824,6 +4051,9 @@ function boot() {
   document.getElementById('secret-enter').addEventListener('click', onSecretEnter);
   document.getElementById('secret-deeper').addEventListener('click', onSecretDeeper);
   document.getElementById('secret-leave').addEventListener('click', onSecretLeave);
+  // 刻意排在下面那个存档用的 visibilitychange 之前：同一事件按注册顺序派发，
+  // 先停加速再存档，读起来才是「先松手，再落笔」
+  setupBoost();
   setupDebugPanel();
   setInterval(() => saveGame(game), SAVE_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(game); });
