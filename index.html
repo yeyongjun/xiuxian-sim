@@ -184,15 +184,17 @@ body {
 
 /* ===== 秘境 ===== */
 /* 与丹房同一套骨架（面板在 #stage 内部，文字掰回左对齐），只是列宽不同：
-   名字列 4.4em 容得下「直入核心」四字，耗时列压在最右——那是决定去不去的那个数，
-   三行竖着一比就知道差着几倍。 */
+   名字列 7.2em 容得下「再深一层（第 7 层）」，标注列吃掉剩下的宽度。
+   没有第三列——上一版最右那列印的是「去不去」要看的耗时，而如今耗时每层都一样，
+   要看的是四项收益与险率，它们全在标注列里。 */
 #secret-panel {
   margin-top: 18px; padding: 10px; text-align: left;
   border: 1px solid var(--gold-dim); background: var(--ink-2);
 }
-#secret-panel[hidden], #secret-rows[hidden], #secret-going[hidden] { display: none; }
+#secret-panel[hidden], #secret-enter-box[hidden], #secret-going[hidden],
+#secret-decide[hidden], #secret-text[hidden] { display: none; }
 .secret-btn {
-  display: grid; grid-template-columns: 4.4em 1fr auto; align-items: center; gap: 8px;
+  display: grid; grid-template-columns: 7.2em 1fr; align-items: center; gap: 8px;
   width: 100%; min-height: 44px; margin: 4px 0; padding: 6px 10px;
   font-family: inherit; font-size: 14px; line-height: 1.3; text-align: left;
   background: transparent; color: var(--gold-dim);
@@ -204,17 +206,12 @@ body {
   display: flex; flex-wrap: wrap; gap: 0 6px;
   font-size: 11px; opacity: 0.75; font-variant-numeric: tabular-nums;
 }
-/* 换行只在标注之间发生，「险 50%·寿−5%」自己不能被拦腰截断 */
+/* 换行只在标注之间发生，「险 40%·寿−8%」自己不能被拦腰截断 */
 .secret-effect span { white-space: nowrap; }
-.secret-years {
-  min-width: 3.8em; text-align: right;
-  color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap;
-}
 .secret-btn.ready:hover { border-color: var(--gold); background: rgba(201,162,39,0.08); }
 .secret-btn.ready { color: var(--gold); border-color: var(--gold-dim); }
 .secret-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.secret-btn:disabled .secret-years { color: var(--gold-dim); }
-/* 进行中。这是全游戏第一个会自己推进的进度条，所以它要比寿元条更显眼一点：
+/* 层进度。这是全游戏第一个会自己推进的进度条，所以它要比寿元条更显眼一点：
    金线加一道辉光，宽度过渡跟着 .fill 的 120ms 走，肉眼能看出它在动。 */
 #secret-going { padding: 4px 2px 2px; }
 #secret-status { font-size: 14px; color: var(--gold-dim); letter-spacing: 1px; margin-bottom: 8px; }
@@ -222,6 +219,27 @@ body {
 #secret-going .bar { min-width: 0; height: 8px; }
 #secret-fill { box-shadow: 0 0 8px rgba(201,162,39,0.5); }
 .secret-note { margin-top: 6px; font-size: 11px; opacity: 0.6; letter-spacing: 0.5px; }
+/* 未落袋的收获。这一行是赌注显示器：撞上险境它整行归零，所以给足对比度，
+   不能和那句灰色的 note 混成一片。 */
+#secret-haul {
+  margin-top: 8px; font-size: 13px; color: var(--gold);
+  font-variant-numeric: tabular-nums; letter-spacing: 0.5px;
+}
+.haul-label {
+  margin-right: 8px; padding: 1px 5px; font-size: 11px; letter-spacing: 1px;
+  color: var(--gold-dim); border: 1px solid var(--gold-dim); opacity: 0.8;
+}
+/* 每层的白描。压暗、缩小、留出行距，读起来是「见闻」而不是「读数」——
+   它挨着两个决定按钮，字号若与按钮持平，会把视线从决定上引开。 */
+#secret-text {
+  margin: 10px 0 2px; font-size: 12.5px; line-height: 1.75;
+  color: var(--text); opacity: 0.72; letter-spacing: 0.5px;
+}
+#secret-decide { margin-top: 8px; }
+/* 弹层里逐层回顾的那几句，与面板上的白描同一套语汇，只是每行前面挂着层号。
+   刻意掰回左对齐（弹层里其余文字是居中的）：带层号的行居中之后，那几个数字
+   参差地悬在半空，读起来不像一份逐层的行程记录 */
+.secret-recall { font-size: 13px; line-height: 1.9; opacity: 0.78; text-align: left; }
 
 /* ===== 神通列表 ===== */
 /* 神通能攒到十几条，一条一行 desc 会把侧栏撑成几屏高。改成一行一条：
@@ -308,13 +326,16 @@ body {
   .pill-btn { min-height: 48px; margin: 6px 0; font-size: 15px; }
   .pill-effect { font-size: 11px; }
   /* 秘境同样留在 #stage 内部，随 order:1 跟着突破按钮走。这里只放大触摸目标：
-     每行 48px 高、行距 6px 防误触——点错一档就是几百载寿元的差别。
-     375px 下净宽约 311px：名字列 66px + 耗时列 58px，标注列剩 171px，
-     「灵材 60~110 / 神通 40% / 功法 25% / 险 50%·寿−5%」会自己折成两行，
+     每行 48px 高、行距 6px 防误触——「再深一层」与「就此出关」贴着摆，点错一个
+     就是几十枚灵材连本带利地没了，这两个按钮是全局最不能误触的地方。
+     375px 下净宽约 311px：名字列 108px，标注列剩约 195px，
+     「灵材 +19 / 神通 20% / 功法 10% / 险 40%·寿−8%」会自己折成两行，
      由 flex-wrap 兜住，绝不横向溢出。 */
   #secret-panel { margin-top: 14px; }
   .secret-btn { min-height: 48px; margin: 6px 0; font-size: 15px; }
   .secret-effect { font-size: 11px; }
+  /* 两个决定按钮之间多留一道，防手指连击 */
+  #secret-decide .secret-btn + .secret-btn { margin-top: 10px; }
 }
 
 /* 关掉双击缩放与 300ms 点击延迟，手机上连点会被识别成缩放手势 */
@@ -387,16 +408,35 @@ button, .modal-btn, .upgrade-btn { touch-action: manipulation; }
         <div class="panel-title">丹房<span class="pill-sum">灵材 <b id="pill-lingcai">0</b></span></div>
         <div id="pill-rows" role="group" aria-label="炼丹"></div>
       </section>
-      <!-- 秘境。同样刻意留在 #stage 内部：派人出去是操作而非参考，手机端要跟着
+      <!-- 秘境。同样刻意留在 #stage 内部：往下钻是操作而非参考，手机端要跟着
            突破按钮一起走。元婴之前 render 会把它整个 hidden。
-           进行中时三个出发按钮整体让位给进度条——那是全游戏第一个会自己变的数字。 -->
+           入秘境之后入口让位给层进度；一层探完，两个决定按钮就地出现——
+           刻意不用弹层：弹层会打断挂机，而这是个可以慢慢想的决定，不设超时。 -->
       <section id="secret-panel" hidden>
         <div class="panel-title">秘境</div>
-        <div id="secret-rows" role="group" aria-label="秘境探索"></div>
+        <div id="secret-enter-box">
+          <button type="button" id="secret-enter" class="secret-btn">
+            <span class="secret-name">入 秘 境</span>
+            <span class="secret-effect" id="secret-enter-stats"></span>
+          </button>
+          <div class="secret-note" id="secret-enter-note"></div>
+        </div>
         <div id="secret-going" hidden>
           <div id="secret-status"></div>
           <div class="bar"><div id="secret-fill" class="fill"></div></div>
-          <div class="secret-note">身在险地，无暇打坐：修炼 ×0.4，灵材亦不入囊中</div>
+          <div id="secret-haul"></div>
+          <div id="secret-text"></div>
+          <div id="secret-decide" role="group" aria-label="秘境抉择" hidden>
+            <button type="button" id="secret-deeper" class="secret-btn">
+              <span class="secret-name" id="secret-deeper-name">再深一层</span>
+              <span class="secret-effect" id="secret-deeper-stats"></span>
+            </button>
+            <button type="button" id="secret-leave" class="secret-btn">
+              <span class="secret-name">就此出关</span>
+              <span class="secret-effect" id="secret-leave-stats"></span>
+            </button>
+          </div>
+          <div class="secret-note" id="secret-note"></div>
         </div>
       </section>
     </main>
@@ -1708,21 +1748,27 @@ function findEvent(id) {
 // ===== data/stances.js =====
 // 心法姿态：随时可切，无冷却、无消耗。同一时刻只能行一门，机会成本本身就是抉择。
 //
-// rate 乘修炼速率，breakAdd 进突破的加法桶，age 乘寿元消耗速度，interval 乘事件间隔。
+// 四门而非从前的五门：「静观天机」（事件频率那档）已删除——那条轴在天赋（气运之子）、
+// 功法（大梦千秋、听潮引）、神通（缩地成寸、顺风耳）里都还有表达，心法专注在
+// 修炼速率 / 突破率 / 寿元三维上，把差别拉大到玩家一眼能看出「在冲刺」。
+//
+// rate 乘修炼速率，breakAdd 进突破的加法桶，age 乘寿元消耗速度。
 // 关键在 rate / age 这一列的比值——它就是「每一点寿元换来多少修为」：
-//   胎息 1.33 最高，却因 rate 最低而真实耗时最长；
-//   烈火 0.89 最低，却是全表最快。
+//   胎息 2.67（0.4/0.15）最高，因 rate 最低而真实耗时最长，是寿元见底时的唯一活路；
+//   烈火 0.75（3.0/4.0）虽不是最低，却是全表最快——它换的是真实时间而非寿元效率：
+//   一层的耗时砍到三分之一，代价是寿元消耗涨到四倍。
 // 挂机游戏里玩家的现实时间不值钱、寿元才是硬约束，所以这两门是真正对立的选择，
 // 而非强弱之分。改动任一数值前先跑 tests/stances.test.mjs 里的效率关系用例。
 const STANCES = {
-  pingxin:  { id: 'pingxin',  name: '平心静气', rate: 1.0, breakAdd: 0,     age: 1.0,  interval: 1.0, desc: '不疾不徐，无过无不及，守常而已' },
-  liehuo:   { id: 'liehuo',   name: '烈火行功', rate: 1.6, breakAdd: -0.15, age: 1.8,  interval: 1.0, desc: '气行如焚，进境极速，然折寿亦速' },
-  baoyuan:  { id: 'baoyuan',  name: '抱元守一', rate: 0.7, breakAdd: 0.20,  age: 1.0,  interval: 1.0, desc: '敛气归元，进境迟缓，而冲关时根基最稳' },
-  taixi:    { id: 'taixi',    name: '胎息',     rate: 0.6, breakAdd: 0,     age: 0.45, interval: 1.3, desc: '息如未生，最省寿元，然功成须以光阴相抵' },
-  jingguan: { id: 'jingguan', name: '静观天机', rate: 0.8, breakAdd: 0,     age: 1.0,  interval: 0.5, desc: '不专于功而察天时，机缘劫难皆倍至' },
+  pingxin:  { id: 'pingxin',  name: '平心静气', rate: 1.0, breakAdd: 0,     age: 1.0,  desc: '不疾不徐，无过无不及，守常而已' },
+  liehuo:   { id: 'liehuo',   name: '烈火行功', rate: 3.0, breakAdd: -0.20, age: 4.0,  desc: '气行如焚，进境极速，然折寿亦速' },
+  baoyuan:  { id: 'baoyuan',  name: '抱元守一', rate: 0.5, breakAdd: 0.30,  age: 1.0,  desc: '敛气归元，进境迟缓，而冲关时根基最稳' },
+  taixi:    { id: 'taixi',    name: '胎息',     rate: 0.4, breakAdd: 0,     age: 0.15, desc: '息如未生，最省寿元，然功成须以光阴相抵' },
 };
 
 // 未知 id 一律回退到平心静气：老存档没有这个字段，坏值也不该让四条公式返回 NaN。
+// 这条路也接住了被删掉的旧心法——老存档里存的 'jingguan' 现在就是一个普通的未知 id，
+// 不需要专门的迁移代码，走这条回退路径即可。
 // 用 hasOwn 而非 `STANCES[id] ?? 默认值`——后者遇到 'constructor'、'toString' 这类
 // 原型链上的键会返回一个函数，四条公式随即算出 NaN，整局静默烂掉。
 function findStance(id) {
@@ -1780,68 +1826,132 @@ function findPill(id) {
 
 
 // ===== data/secrets.js =====
-// 秘境探索：全游戏第一个「跨时间的状态」。
+// 秘境探索：逐层深入，见好就收。
 //
-// 现有的事件是冻结时间等玩家选择，秘境刻意相反——派出去之后时间照走，进度自己推进，
-// 若干年后归来才结算。它同时解决两件事：中后期有主动可做的事（不再是同样的四层填充），
-// 以及界面上终于有一样东西会自己变化、玩家会惦记着。
+// 上一版是三个预设档位（浅探/深入/直入核心），出发之后到归来之前玩家没有任何决定——
+// 「射后不理」。玩家实测的反馈就一句：太简单了。整个活动只有一个决定，而且是在开始时
+// 做的，做完就只剩等。
 //
-// 代价不是「点一下换收益」那么便宜：探索期间你没在打坐，修炼速度只剩四成，
-// 被动灵材也断供（灵材改由秘境产出）。寿元照常消耗——这才是真正的账。
+// 这一版整体换成 push-your-luck：只有一个「入秘境」按钮，秘境分层，每探完一层玩家必须
+// 决定「再深一层」还是「就此出关」。收获只有主动出关才落袋；撞上险境则强制出关，
+// 未落袋的收获全部损失。决定从「一次」变成「每层一次」，而且每一次都发生在信息更新之后
+// （手上攒了多少、下一层多险），这才是这个玩法真正的内容。
+//
+// 代价与上一版一致，不重新定价：探层期间修炼速度只剩四成、被动灵材断供、寿元照常消耗。
 const SECRET_UNLOCK_REALM = 3; // 元婴。此前寿元太薄，一次深入就是半条命
 
-// 耗时必须按「当前境界初期」的耗时缩放，绝不能写绝对年数，也不能按当前小层算——
-// 按当前小层算是修过的一个 bug：会让同一境界内小层初期出发比圆满出发便宜 34%，
-// 变相奖励「攒着修为不去突破、先刷一趟秘境」。详细推导见 formulas.js 的
-// expeditionYears 注释，这里只记结论：一趟的耗时只认境界，不认小层。
+// 最深七层。上限不是随手取的整数：见下面 secretLayer 的推导，第 4~5 层之间就是期望的
+// 拐点，七层给了「明知期望转负仍要再赌两层」的空间，也让全通成为一件稀有但真的会发生的事。
+const SECRET_MAX_LAYER = 7;
+
+// 每深一层的耗时 = 这个系数 × 境界初期那一小层的裸装耗时。
 //
-// 小层耗时 levelSeconds(n) = 12 × 1.15^n，从练气初期的 12 载涨到渡劫圆满的约 1592 载。
-// 若一次探索固定「50 载」，元婴期占掉半个境界，渡劫期短得可以忽略不计——这个系统
-// 会在它最该发力的后期自己作废。timeFactor 是「几个小层的光阴」，因此 core 在任何境界
-// 都稳定占掉该境界约六成的时长，抉择的重量九境一致。
-// （事件间隔与灵材产出都踩过同一个坑，见 tick.js 的 EVENT_LEVEL_RATIO
-//   与 formulas.js 的 LINGCAI_PER_LEVEL，修法相同。）
+// 基准取「境界初期」（sub 固定为 0）而不是当前小层，这是上一版修过的一个 bug，保留：
+// levelSeconds 按 1.15^n 指数增长，若按当前小层缩放，同一境界内小层初期出发就比圆满
+// 出发便宜 1.15^3 ≈ 1.52 倍——而灵材是绝对值，于是最优解变成「攒着修为不去突破、
+// 先刷一趟秘境」。改成只认境界之后，同境界内任何时候入秘境每层耗时都相同，境界之间
+// 仍按 levelSeconds 正确缩放（元婴初期每层 26 载，渡劫初期每层 637 载），
+// 抉择的重量九境一致。别改回 state.sub 去。
 //
-// 灵材数量反过来用绝对值，这不是不一致：灵材本身已经是尺度无关的量
-// （LINGCAI_PER_LEVEL 让每个小层固定产出约 4 枚）。
+// 数值上恰好与 formulas.js 的 EXPEDITION_RATE_MULT 同为 0.4，但两者毫无关系：
+// 一个是「一层要走多久」，一个是「探层期间修炼打几折」。别顺手合成一个常量。
+const SECRET_LAYER_TIME_FACTOR = 0.4;
+
+// ===== 每层的收益与风险 =====
 //
-// 灵材区间刻意压得很低——三档均值分别只值 8 / 18 / 40 枚，折回气丹只等于 0.28 /
-// 0.63 / 1.4 层修为，连「探索期间 ×0.4 惩罚」损失掉的修为都补不平：三档的净修为
-// （灵材折算层数 − 惩罚损失的层数）实测都在 0 附近微幅摆动（浅探 −0.02、深入
-// +0.03、核心 −0.07 层，见 tests/secrets.test.mjs 的门禁用例），不像上一版
-// 那样核心一趟净赚 +1.33 层修为——上一版的灵材给得远超「补平 ×0.4」所需，效果是
-// 不停出门比老实打坐还快近一倍，把「挂机游戏」这个前提直接掀了。灵材现在只用来
-// 换丹药，不该再充当「更快的修炼」；真正促成出门的理由是三档各自独占的掉落率
-// （shentongChance / gongfaChance）与风险（riskChance / lifeCostRatio）——
-// 秘境是去拿挂机拿不到的东西，不是去刷比挂机更快的进度。
+// 全部是层数 n 的线性函数，故意选成让最优停手点落在中段的一组数：
 //
-// lifeCostRatio 同理取「当前境界寿元上限的比例」而非绝对年数——REALMS[].life
-// 从 120 跳到 22000，绝对数在两头必有一头荒唐。
-const SECRET_DEPTHS = [
-  {
-    id: 'shallow', name: '浅探',
-    timeFactor: 0.5, lingcaiMin: 6, lingcaiMax: 10,
-    shentongChance: 0.08, gongfaChance: 0, riskChance: 0, lifeCostRatio: 0,
-    desc: '只在洞口十丈之内打转，拾些散落的灵材便回。稳当，也仅止于稳当',
-  },
-  {
-    id: 'deep', name: '深入',
-    timeFactor: 1.0, lingcaiMin: 14, lingcaiMax: 22,
-    shentongChance: 0.25, gongfaChance: 0.12, riskChance: 0.25, lifeCostRatio: 0.02,
-    desc: '循地脉直下，前人遗藏多在此处；四之一的行程要撞上未散的凶煞，折寿染疾',
-  },
-  {
-    id: 'core', name: '直入核心',
-    timeFactor: 3.0, lingcaiMin: 30, lingcaiMax: 50,
-    shentongChance: 0.45, gongfaChance: 0.30, riskChance: 0.50, lifeCostRatio: 0.05,
-    desc: '直趋秘境本源，最厚的机缘与最狠的杀伐同在一处。半数人在此折了寿元、带回一身沉疴',
-  },
+//   灵材 4+3n · 神通 0.04n · 功法 0.02n · 险境 0.08n · 折寿比例 0.015n
+//
+// 推导：在第 n 层手上攒了 B 枚（= 前 n−1 层的累计）、这一层能得 g 枚、险境概率 r，
+// 则「再深一层」的期望是 (1−r)(B+g)，比 B 大才值得推，即 g/(B+g) > r：
+//
+//   第1层  B=0   g=7   1.00 > 0.08  推
+//   第2层  B=7   g=10  0.59 > 0.16  推
+//   第3层  B=17  g=13  0.43 > 0.24  推
+//   第4层  B=30  g=16  0.35 > 0.32  推（勉强）
+//   第5层  B=46  g=19  0.29 < 0.40  停
+//
+// 于是纯灵材视角的最优停手在第 4~5 层之间，落袋约 46 枚（实测蒙特卡洛：固定第 k 层
+// 出关的期望落袋分别是 6.4 / 13.1 / 17.6 / 18.4 / 15.6 / 10.8 / 6.1 枚，峰值在 k=4，
+// 且 k=3 与 k=4 只差 0.8 枚——这个「几乎持平」是刻意的，它让第 4 层那个决定真的两难）。
+//
+// 而神通/功法掉落率随层数线性升（第 7 层 28% / 14%，是第 1 层的七倍），给了「明知
+// 期望转负也要再赌一层」的理由——秘境是去拿挂机拿不到的东西的地方，不是刷进度的地方，
+// 所以真正促成深入的动机必须是掉落，而不是灵材。这正是 push-your-luck 该有的手感。
+//
+// 七层全通的概率是 0.92×0.84×0.76×0.68×0.60×0.52×0.44 ≈ 5.5%，总收获 112 枚。
+// 稀有但可能，值得追。
+//
+// lifeCostRatio 取「当前境界寿元上限的比例」而非绝对年数——REALMS[].life 从 120 跳到
+// 22000，绝对数在两头必有一头荒唐。
+//
+// 返回 null 而非兜底某一层：层号越界时猜错就是玩家白丢几百载寿元（与 findPill 同一条理由）。
+function secretLayer(n) {
+  if (!Number.isInteger(n) || n < 1 || n > SECRET_MAX_LAYER) return null;
+  return {
+    layer: n,
+    lingcai: 4 + 3 * n,
+    shentongChance: 0.04 * n,
+    gongfaChance: 0.02 * n,
+    riskChance: 0.08 * n,
+    lifeCostRatio: 0.015 * n,
+  };
+}
+
+// ===== 每层的白描 =====
+//
+// 「太简单」不只是机制问题，也是质感问题：上一版一趟只给一句结算文案，探索本身没有
+// 任何可读的东西。这里每层给一句文言白描，随层数递进——浅层是石壁苔痕，深层是血字
+// 未干、有东西在看你——每层备两三句随机取一，重复入秘境不会读到一样的字。
+//
+// 文风与 data/events.js 一致：第二人称、具体感官画面、最多两句、无现代词、无感叹号。
+// 硬约束：不得出现 < > &。这些字符经 innerHTML 渲染，类标签串会当场撑坏 DOM
+// （tests/secrets.test.mjs 有一条用例逐句扫描）。
+const SECRET_LAYER_TEXTS = [
+  [
+    '洞口的风还是暖的。石壁上苔痕未干，指腹一按便沁出水来。',
+    '你踏过一地碎瓦，脚下有旧年香灰的气味。回头仍看得见天光。',
+    '石阶被人踩得发亮，缝里嵌着几粒发黑的谷子。',
+  ],
+  [
+    '天光断在身后。你点起一盏引路的灯，火苗歪向深处，说明前头透风。',
+    '壁上有凿痕，深浅不一，像是有人凿了一半便改了主意。',
+    '水声在头顶，听着是活水，可摸上去的石头是干的。',
+  ],
+  [
+    '一具白骨盘坐在道旁，掌中托着只空瓶，瓶口朝着来路。',
+    '灯焰忽然缩成豆大。你屏息数到十，它才慢慢舒开。',
+    '地上散着十余把断剑，皆是朝同一个方向折断的。',
+  ],
+  [
+    '壁上有字，是用指甲刻的，刻了「莫回」二字便断了。',
+    '你踩到一片软的东西，抬脚时它自己合了起来。',
+    '空气忽然变甜，甜得发腻。师门里说过，这味道叫尸香。',
+  ],
+  [
+    '石壁上的血字还未干透，指印一路拖向更深处。',
+    '灯照见前方有水，水面平得像镜。你的倒影比你先动了一下。',
+    '你数着自己的脚步声，数到第七步时，多出了一声。',
+  ],
+  [
+    '四壁开始发烫。你袖中的玉简自己裂了一道缝。',
+    '有东西在看你。回头三次，三次都只见影子贴在壁上，姿势与你不同。',
+    '灯灭了。你却仍看得见——这不是好事。',
+  ],
+  [
+    '地上再无尘土，只余一层极细的白灰，踩下去无声。',
+    '你终于听清了那个声音。它一直在念你的名字，从你进来那一刻起。',
+    '前方是一扇门，门上九道封印，八道已经断了。',
+  ],
 ];
 
-// 未知 id 返回 null 而非兜底某一种：三种深度的耗时与风险差着数倍，
-// 猜错了就是玩家白丢几百载寿元（与 findPill 同一条理由）。
-function findDepth(id) {
-  return SECRET_DEPTHS.find((d) => d.id === id) ?? null;
+// 抽这一层的白描。抽签放在结算随机序列的最后一位（见 actions.resolveLayer 的注释），
+// 层号越界时给空串而不是抛——文案是装饰，不该有能力弄死一趟探索。
+function pickLayerText(n, rnd = Math.random) {
+  const list = SECRET_LAYER_TEXTS[n - 1] ?? [];
+  if (list.length === 0) return '';
+  return list[Math.floor(rnd() * list.length) % list.length];
 }
 
 // ===== 掉落池 =====
@@ -1876,7 +1986,7 @@ function secretShentongPool(realm) {
   return SECRET_SHENTONG_POOL[poolFor(realm)] ?? [];
 }
 
-// 风险附带的沉疴只从既有 DEBUFFS 里取，不新增种类。
+// 险境附带的沉疴只从既有 DEBUFFS 里取，不新增种类。
 // 剔掉两条与秘境无关的：道基受损专属于冲关失败（且被明心见性免疫），
 // 天道烙印是渡劫期天道所记，不该由一趟探险背上。
 const SECRET_DEBUFF_IDS = ['handu', 'kuxiu', 'leishang', 'shenshi', 'xinmo'];
@@ -1888,6 +1998,9 @@ const SECRET_DEBUFF_RATIO = 0.05;
 // 事件里的重复神通折的是修为（DUP_SHENTONG_COMPENSATION = 0.3 层），秘境折灵材：
 // 这趟出门本就是为灵材去的，用同一种货币结账，玩家不必换算。
 // 10 枚正好是一颗回气丹或洗髓丹——聊胜于无，又绝不至于比正常掉落更划算。
+//
+// 注意折出来的灵材同样进「未落袋」那一堆，撞上险境一并损失：安慰奖也是收获，
+// 收获就得跟着这趟的成败走。
 const SECRET_DUP_LINGCAI = 10;
 
 // 掉落的功法若不强于己有，换成灵材而不是硬塞。
@@ -1897,6 +2010,10 @@ const SECRET_DUP_LINGCAI = 10;
 // 「机缘」当场变成腰斩修炼速度的暗刀——这不是设计，是 bug。按倍率比一次，
 // 不如己有的就当残页卖了。倍率是功法的主项，其余字段（寿元、突破、机缘）
 // 各有正负，不参与这次比较。
+//
+// 本版要比两次：拾到那一刻比一次（对照当时会用的那一门），出关落袋时再比一次。
+// 两次都必要——探层期间事件照常降临，玩家完全可能在秘境里靠一桩机缘换到更好的功法，
+// 此时手里那卷残经就从「升级」变成了「暗刀」。见 actions.withdrawExpedition。
 function betterGongfa(currentId, dropId) {
   const cur = GONGFA[currentId] ?? GONGFA.yinqi;
   const drop = GONGFA[dropId];
@@ -1990,39 +2107,48 @@ function rateAdditive(state) {
   return add;
 }
 
-// 探索期间的修炼速度倍率。人在秘境里刀口舔血，不在蒲团上打坐——
-// 这个惩罚是整个秘境系统的定价基准，改它等于重定价三种深度，先跑 tests/secrets.test.mjs。
+// 探层期间的修炼速度倍率。人在秘境里刀口舔血，不在蒲团上打坐——
+// 这个惩罚是整个秘境系统的定价基准，改它等于重定价每一层，先跑 tests/secrets.test.mjs。
 const EXPEDITION_RATE_MULT = 0.4;
 
-// 是否正在秘境中。tick / formulas / render / actions 都要问这个问题，
-// 判据只能有一份：将来 expedition 的形状一变（比如加个 depth 队列），改这一处。
+// 是否正在往下探。tick / formulas / render / actions 都要问这个问题，判据只能有一份。
+//
+// 关键在于「等待决定」不算在探：玩家在「再深一层 / 就此出关」之间犹豫时，探索是暂停的，
+// 修炼速度回到 ×1.0、被动灵材也恢复——你退在洞口歇着，没在探。这不是施舍，是这个设计
+// 成立的前提：挂机玩家离开时不该被强制赌博，所以不设超时、不自动出关；而既然可以无限
+// 期地停在那里，停留就绝不能有任何代价，否则「不设超时」只是把强制赌博换成了慢性罚款。
+// 犹豫没有惩罚，那个决定才是纯粹的。
 function isExploring(state) {
+  return !!state?.expedition && !state.expedition.awaiting;
+}
+
+// 是否人在秘境里（含正在等待决定）。与 isExploring 分开的唯一理由就是上面那条：
+// 等待决定期间不吃探层惩罚，但人确实还在洞里，不能再入一趟。
+function inSecretRealm(state) {
   return !!state?.expedition;
 }
 
-// 一趟探索要走多少载。按裸装耗时缩放，与玩家的修炼加成无关——
-// 秘境的路程有多远是秘境的事，不因为你修得快就变近。
+// 每深一层要走多少载。按裸装耗时缩放，与玩家的修炼加成无关——
+// 秘境的路有多深是秘境的事，不因为你修得快就变浅。
 //
 // 基准取「当前境界初期」（sub 固定为 0）的耗时，不能取当前小层。levelSeconds 按
-// 1.15^n 指数增长，若按当前小层缩放，同一境界内小层初期出发就比圆满出发便宜
+// 1.15^n 指数增长，若按当前小层缩放，同一境界内小层初期入秘境就比圆满入秘境便宜
 // 达 1.15^3 ≈ 1.52 倍（34%）——这会奖励「攒着修为不去突破、先刷一趟秘境」这种
 // 反直觉的最优解，是两条本来各自成立的约束（耗时按小层缩放、灵材是绝对值）相乘
 // 出来的副作用，不是有意为之。改成只认境界、不认小层之后，同一境界内任何时候
-// 出发耗时都相同，境界之间仍按 levelSeconds 正确缩放（这正是下面 SECRET_DEPTHS
-// 头部注释里「抉择的重量九境一致」的由来）。
+// 入秘境每层耗时都相同，境界之间仍按 levelSeconds 正确缩放（这正是 data/secrets.js
+// 里「抉择的重量九境一致」的由来）。别「顺手」把这里改回 state.sub 去。
 //
-// 残余副作用：出发时的小层不同，探索期间因 ×0.4 被搁置的绝对修为量也会跟着变——
-// cultivationRate 本身随小层升高而增长。实测过（tests 之外的真实 tick 模拟）方向
-// 其实反直觉：小层越靠后出发净收益反而越高，不是越低（固定的 timeFactor 耗时，
-// 对着已经变贵的当前小层来说相当于变相缩短了「以小层计的相对时长」，冲淡了 ×0.4
-// 的影响）。但这与上面修掉的那个 bug 性质完全不同：它不体现在按钮上——耗时和
-// 灵材如今都只认境界，玩家看不到任何「再等等更划算」的信号；量级也小得多（同境界
-// 四个小层出发，直入核心的净收益在 −0.07~+0.35 层之间摆动，对照原 bug 是耗时本身
-// 相差 52%）；且它是修为曲线指数增长的通性，不专属于秘境。保留不处理，也不要
-// 「顺手」把这里改回 state.sub 去补偿它——那会让原来那个大 bug 原样复活。
-function expeditionYears(state, depth) {
-  if (!depth) return 0;
-  return levelSeconds(levelIndex(state.realm, 0)) * depth.timeFactor;
+// 残余副作用：入秘境时的小层不同，探层期间因 ×0.4 被搁置的绝对修为量也会跟着变——
+// cultivationRate 本身随小层升高而增长。这与上面修掉的那个 bug 性质完全不同：它不
+// 体现在按钮上（耗时和灵材如今都只认境界，玩家看不到任何「再等等更划算」的信号），
+// 量级也小得多，且它是修为曲线指数增长的通性，不专属于秘境。保留不处理。
+//
+// 现算而不是存一份：玩家完全可能在秘境里突破（探层期间修为照涨，只是慢），
+// 此后每一层都按新境界的尺度算路程。已经在走的那一层不受影响——它的 total 在
+// 进入那一层的当口就定下了，走到哪算哪（见 actions.descendLayer）。
+function layerYears(state) {
+  return levelSeconds(levelIndex(state.realm, 0)) * SECRET_LAYER_TIME_FACTOR;
 }
 
 // 心法 rate 是独立乘数，落在加法桶的地板夹取之外：
@@ -2089,18 +2215,19 @@ function fortuneModifier(state) {
     + (g.fortuneAdd ?? 0);
 }
 
-// 事件间隔加法修正。心法是乘数，不进加法桶——静观天机说的是「间隔减半」，
-// 若混进加法桶，它与气运之子（−40%）叠加会直接撞上 0.2 的地板
+// 事件间隔加法修正。心法自四选四改版起不再参与这一维——原来担着这个职责的
+// 「静观天机」已删除，事件频率的表达全部收拢到天赋（气运之子等）、功法
+// （大梦千秋、听潮引）、神通（缩地成寸、顺风耳）里，心法专注在修炼速率 / 突破率 / 寿元三维上。
 function intervalModifier(state) {
   const g = GONGFA[state.gongfaId] ?? GONGFA.yinqi;
   const add = sumField(stateTalents(state), 'intervalAdd')
     + sumField(stateShentong(state), 'intervalAdd')
     + (g.intervalAdd ?? 0);
-  return Math.max(0.2, 1 + add) * findStance(state.stanceId).interval;
+  return Math.max(0.2, 1 + add);
 }
 
 // 寿元消耗速度倍率。龟息功与心法相乘：两者都是「呼吸慢下来」的同一件事，
-// 相加会让胎息 + 龟息变成 0.2，相乘才是 0.3375
+// 相加会让胎息 + 龟息越界为负（1 − 0.85 − 0.25 = −0.10），相乘才是 0.15 × 0.75 = 0.1125
 function ageRate(state) {
   return (hasShentong(state, 'guixi') ? 0.75 : 1) * findStance(state.stanceId).age;
 }
@@ -2171,11 +2298,14 @@ function createState(rnd = Math.random, carry = {}) {
     lingcai: 0,
     // 固元丹的一次性突破加成。刻意做成层内状态：炼了就得用掉，用早了浪费
     pillBreakBonus: 0,
-    // 秘境探索。null 表示人在山中打坐；进行中时是 { depthId, remaining, total }，
-    // remaining 由 tick 每步递减（因此在线与离线自动一致）
+    // 秘境探索。null 表示人在山中打坐；在洞里时是
+    //   { layer, remaining, total, awaiting, haul: { lingcai, shentongIds, gongfaId }, texts }
+    // remaining 由 tick 每步递减（因此在线与离线自动一致），归零即由 resolveLayer 结算
+    // 这一层并把 awaiting 置真，停在那里等玩家决定「再深一层」还是「就此出关」。
+    // haul 是未落袋的收获——只有主动出关才写进 state，撞上险境全部损失。
     expedition: null,
-    // 归来的结算。刻意与 expedition 分开存：探索可以在离线期间完成，而弹层必须等
-    // 玩家回来才弹，所以结果得在 state 里等着，由 UI 取走（见 takeExpeditionResult）
+    // 出关的结算。刻意与 expedition 分开存：险境强制出关可能发生在离线期间，而弹层
+    // 必须等玩家回来才弹，所以结果得在 state 里等着，由 UI 取走（见 takeExpeditionResult）
     expeditionResult: null,
     luck: 0,
     eventsSeen: 0,
@@ -2232,17 +2362,46 @@ function deserialize(json) {
   // 秘境同样是后加的字段：老存档里没有，缺席一律补 null（人在山中打坐），不作废整档。
   if (data.expedition === undefined) data.expedition = null;
   if (data.expeditionResult === undefined) data.expeditionResult = null;
-  // 但写着东西就必须是能推进、能结算的东西。坏值在这里放过去的后果不是崩，是静默烂档：
-  // remaining 为 NaN 的探索永远不会归零，玩家的修炼速度就永久停在 0.4 倍、灵材永久断供，
-  // 界面上那句「还需 NaN 载」也再不会变。深度 id 认不出来则结算时无从取值。
+  // 三档预设时代（{ depthId, remaining, total }）的存档：那套语义已经整体不存在了，
+  // 没有任何诚实的方式把它翻译成层数与行囊——凭空给个 layer 就是替玩家决定他在第几层，
+  // 而层数直接定收益与险率。归零成「人在山中打坐」，玩家丢的是一趟没走完的探索，
+  // 而不是一整世的进度。同理，读不出层数的旧结算也一并丢掉：少弹一个总结弹层，
+  // 好过弹一个字段全是 undefined 的空框。
+  if (isLegacyExpedition(data.expedition)) data.expedition = null;
+  if (isLegacyResult(data.expeditionResult)) data.expeditionResult = null;
+  // 剩下的必须是能推进、能结算的东西。坏值在这里放过去的后果不是崩，是静默烂档：
+  // remaining 为 NaN 的探索永远不会归零，玩家的修炼速度就永久停在 0.4 倍、灵材永久
+  // 断供，界面上那句「还需 NaN 载」也再不会变。层号越界则收益与险率无从取值。
   if (data.expedition !== null && !validExpedition(data.expedition)) return null;
   return data;
 }
 
+function isLegacyExpedition(e) {
+  return !!e && typeof e === 'object' && e.depthId !== undefined && e.layer === undefined;
+}
+
+function isLegacyResult(r) {
+  return !!r && typeof r === 'object' && r.layers === undefined;
+}
+
+// haul 缺席补空行囊（后加的字段照既有约定补默认值），但写着值就必须是有限数：
+// lingcai 每层都进 `+=`，一个 null 就让未落袋的收获永远是 NaN，出关时把玩家的
+// 灵材整个染成 NaN，丹房从此全片灰掉。
+function validHaul(e) {
+  if (e.haul === undefined || e.haul === null) { e.haul = { lingcai: 0, shentongIds: [], gongfaId: null }; return true; }
+  if (typeof e.haul !== 'object') return false;
+  if (!Number.isFinite(e.haul.lingcai)) return false;
+  if (!Array.isArray(e.haul.shentongIds)) return false;
+  return true;
+}
+
 function validExpedition(e) {
   if (!e || typeof e !== 'object') return false;
-  if (!findDepth(e.depthId)) return false;
-  return Number.isFinite(e.remaining) && Number.isFinite(e.total) && e.total > 0;
+  if (!Number.isInteger(e.layer) || e.layer < 1 || e.layer > SECRET_MAX_LAYER) return false;
+  if (!Number.isFinite(e.remaining) || !Number.isFinite(e.total) || e.total <= 0) return false;
+  if (!Array.isArray(e.texts)) e.texts = [];
+  e.awaiting = !!e.awaiting;
+  return validHaul(e);
 }
 
 
@@ -2326,8 +2485,9 @@ function advanceOneStep(state, opts) {
   // `?? 0` 是给老存档留的门：它们的 lingcai 由 deserialize 补成 0，这里再兜一次，
   // 免得任何一条没走存档的路径（调试面板直改 state）把它变成 NaN
   //
-  // 探索期间断供：灵材改由秘境一次性结算产出。两头都拿的话，深入的收益就不是
+  // 探层期间断供：灵材改由秘境逐层产出。两头都拿的话，深入的收益就不是
   // 「换来的」而是「白捡的」，那个 ×0.4 的修炼惩罚也就再压不住任何抉择。
+  // 等待决定期间不算在探（isExploring 为假），被动积累照常——理由见 formulas.isExploring。
   if (!isExploring(state)) {
     state.lingcai = (state.lingcai ?? 0) + lingcaiRate(state) * STEP;
   }
@@ -2343,15 +2503,18 @@ function advanceOneStep(state, opts) {
     state.debuffs = state.debuffs.filter((d) => d.remaining > 0);
   }
 
-  // 秘境进度必须在这里推进，而不是在 UI 的每帧循环里：这样在线与离线自动一致
-  // （离线走的是同一条 tick），玩家关掉标签页那几个小时里派出去的人照样在走路，
-  // 也照样会归来。结算落进 state.expeditionResult 等玩家回来取——resolveExpedition
-  // 只动数据不碰弹层，正是为了让「探索完成」与「玩家看见」这两件事解耦。
+  // 层进度必须在这里推进，而不是在 UI 的每帧循环里：这样在线与离线自动一致
+  // （离线走的是同一条 tick），玩家关掉标签页那几个小时里，洞里的人照样在往下走。
   //
-  // 放在沉疴衰减之后：风险染上的那一条应当拿到完整时长，不该在同一步里先被扣掉 0.1。
+  // 关键的一条：resolveLayer 探完一层就停在「等待决定」，绝不自己往下钻。于是离线
+  // 期间层进度正常推进、推完一层就停住，玩家回来看到的是「已探到第 3 层，请决定」，
+  // 而不是替他连赌了七把的结果。等待决定期间 isExploring 为假，这个分支自然不再进——
+  // 停手这件事不需要额外的开关，它就是同一个判据的另一面。
+  //
+  // 放在沉疴衰减之后：险境染上的那一条应当拿到完整时长，不该在同一步里先被扣掉 0.1。
   if (isExploring(state)) {
     state.expedition.remaining -= STEP;
-    if (state.expedition.remaining <= 0) resolveExpedition(state, opts.rng);
+    if (state.expedition.remaining <= 0) resolveLayer(state, opts.rng);
   }
 
   // 事件倒计时只在在线时推进——机缘必须由玩家亲自抉择
@@ -2654,85 +2817,96 @@ function resolveEvent(state, event, optionIndex, rnd = Math.random) {
   return { applied };
 }
 
-// ===== 秘境探索 =====
+// ===== 秘境探索：逐层深入，见好就收 =====
 //
-// 与事件正好相反的一套时间语义：事件冻结时间等玩家选择，秘境让时间照走。
-// 出发之后玩家什么也不用点，进度在 tick 里自己推进（因此离线也照样走），
-// 若干年后 tick 调 resolveExpedition 结算，把结果搁在 state.expeditionResult 里
-// 等 UI 来取——弹层必须等玩家回来才弹，不能在他不在的时候自己弹给空气看。
+// 与事件正好相反的一套时间语义：事件冻结时间等玩家选择，秘境让时间照走。层进度在 tick
+// 里自己推进（因此离线也照样走），一层走完 tick 调 resolveLayer——而 resolveLayer 只做
+// 一件事：把这一层的账算清，然后停下来等玩家决定。
+//
+// 三条不变量贯穿这一节，改动前先读懂：
+//
+//  1. 收获只有主动出关才落袋。探到的灵材、神通、功法全部先记在 expedition.haul 里，
+//     withdrawExpedition 才真正写进 state。这是整个设计的支点：撞上险境时 haul 全灭，
+//     「再深一层」才有真正的赌注，而不只是「再等一会儿」。
+//  2. 等待决定期间不算在探（见 formulas.isExploring）。不设超时、不自动出关，
+//     所以停留必须零代价，否则挂机玩家一离开就在慢性罚款。
+//  3. 玩家不在线时绝不替他做决定。resolveLayer 里没有任何一条分支依赖「玩家在不在线」，
+//     离线与在线算出的是同一个结果，而它到「等待决定」就停手。
 
 function canExplore(state) {
   if (state.dead || state.ascended) return false;
   if (state.realm >= ASCEND_REALM) return false;
   if (state.realm < SECRET_UNLOCK_REALM) return false;
-  if (isExploring(state)) return false;
-  // 有待抉择的事件时不许出发：那会让两个弹层打架，而且事件正冻结着时间，
-  // 探索进度根本走不动，玩家只会看到一个卡住的倒计时
+  // 判据是 inSecretRealm 而不是 isExploring：等待决定时人还在洞里，不许再入一趟
+  if (inSecretRealm(state)) return false;
+  // 有待抉择的事件时不许入：那会让两个弹层打架，而且事件正冻结着时间，
+  // 层进度根本走不动，玩家只会看到一个卡住的倒计时
   if (state.pendingEventId) return false;
   return true;
 }
 
-// 出发。耗时在按下按钮的这一刻按当前小层算定并存进 total——
-// 中途突破了也不追加时长，走到哪算哪，路程是出发时就定下的
-function startExpedition(state, depthId) {
-  const depth = findDepth(depthId);
-  if (!depth || !canExplore(state)) return { ok: false, depth };
-  const total = expeditionYears(state, depth);
-  state.expedition = { depthId: depth.id, remaining: total, total };
-  return { ok: true, depth, total };
+// 空的行囊。单独一个函数是因为 startExpedition 与存档补默认值两处都要用同一个形状
+function emptyHaul() {
+  return { lingcai: 0, shentongIds: [], gongfaId: null };
 }
 
-// 归来结算。由 tick 在 remaining 归零时调用，玩家不参与——所以这里绝不能有分支
-// 依赖「玩家在不在线」，否则离线归来与在线归来会算出两个不同的结果。
+// 入秘境，直接开始第一层
+function startExpedition(state) {
+  if (!canExplore(state)) return { ok: false };
+  const total = layerYears(state);
+  state.expedition = {
+    layer: 1, remaining: total, total, awaiting: false, haul: emptyHaul(), texts: [],
+  };
+  return { ok: true, layer: 1, total };
+}
+
+// 一层探完的结算。由 tick 在 remaining 归零时调用。
 //
-// rnd 的调用次序是固定的（灵材 → 神通门槛 → 神通抽取 → 功法门槛 → 功法抽取 →
-// 风险门槛 → 沉疴抽取），这是 tick 分片一致性（tick(10) == 10×tick(1)）的前提之一：
-// 同一颗种子在两条推进路径上必须消耗同样多、同样序的随机数。
-// 概率为 0 的门槛（浅探的功法与风险）照样掷一次再判负，就是为了保住这个次序。
-function resolveExpedition(state, rnd = Math.random) {
-  const depth = findDepth(state.expedition?.depthId);
-  if (!depth) { state.expedition = null; return null; }
+// rnd 的调用次序是固定的（神通门槛 →（过则）神通抽取 → 功法门槛 →（过则）功法抽取
+// → 险境门槛 →（过则）沉疴抽取 → 白描抽取），这是 tick 分片一致性
+// （tick(10) == 10×tick(1)）的前提之一：同一颗种子在两条推进路径上必须消耗同样多、
+// 同样序的随机数。门槛照样掷一次再判负，就是为了保住这个次序。
+//
+// 白描的抽签刻意排在最后一位：它是装饰，不该占住前面的位置，让「灵材/掉落/险境」
+// 这三件正事的打点位置随文案的增删而漂移（测试里那些 rolls(...) 会一起烂掉）。
+//
+// 灵材不掷骰：secretLayer(n).lingcai 是定额 4+3n。押注的随机性全部集中在险境那一掷上，
+// 收益端确定、风险端随机，玩家才算得清「再深一层」值不值——收益也随机的话，
+// 那张停手表（见 data/secrets.js）就没法给玩家一个可推理的最优解了。
+function resolveLayer(state, rnd = Math.random) {
+  const e = state.expedition;
+  if (!e || e.awaiting) return null;
+  const spec = secretLayer(e.layer);
+  // 层号越界只会来自被改坏的存档。清掉整趟而不是兜底某一层：兜底就是替玩家凭空
+  // 决定他在第几层，而层数直接定收益与险率
+  if (!spec) { state.expedition = null; return null; }
 
-  const applied = [];
-  let lingcai = Math.round(depth.lingcaiMin + rnd() * (depth.lingcaiMax - depth.lingcaiMin));
-  const found = { shentongId: null, dupShentong: false, gongfaId: null, staleGongfa: false };
+  const haul = e.haul;
+  haul.lingcai += spec.lingcai;
 
-  if (rnd() < depth.shentongChance) {
+  if (rnd() < spec.shentongChance) {
     const pool = secretShentongPool(state.realm);
     const id = pool[Math.floor(rnd() * pool.length) % pool.length];
     const power = SHENTONG.find((s) => s.id === id);
-    if (state.shentongIds.includes(id)) {
-      // 与事件里的重复神通同一条道理，只是折成灵材而非修为：这趟出门本就为灵材
-      found.dupShentong = true;
-      lingcai += SECRET_DUP_LINGCAI;
-      applied.push(`故技重温，折灵材 ${SECRET_DUP_LINGCAI} 枚`);
-    } else if (power) {
-      found.shentongId = id;
-      state.shentongIds.push(id);
-      applied.push(`习得「${power.name}」`);
-    }
+    // 已在身上的、以及这趟已经拾到的，都算重复：同一门神通不该在行囊里躺两份
+    const held = state.shentongIds.includes(id) || haul.shentongIds.includes(id);
+    if (held) haul.lingcai += SECRET_DUP_LINGCAI;
+    else if (power) haul.shentongIds.push(id);
   }
 
-  if (rnd() < depth.gongfaChance) {
+  if (rnd() < spec.gongfaChance) {
     const pool = secretGongfaPool(state.realm);
     const id = pool[Math.floor(rnd() * pool.length) % pool.length];
     const art = GONGFA[id];
-    if (art && betterGongfa(state.gongfaId, id)) {
-      found.gongfaId = id;
-      state.gongfaId = id;
-      applied.push(`改修《${art.name}》`);
-    } else if (art) {
-      // 不如己有的功法折成灵材。理由见 secrets.js 的 betterGongfa——
-      // 径直覆盖掉更好的功法，是把机缘变成暗刀
-      found.staleGongfa = true;
-      lingcai += SECRET_DUP_LINGCAI;
-      applied.push(`残卷不及己有，折灵材 ${SECRET_DUP_LINGCAI} 枚`);
-    }
+    // 比较对象是「出关后真正会用的那一门」：行囊里已有更好的残卷时，对照那一卷
+    const current = haul.gongfaId ?? state.gongfaId;
+    if (art && betterGongfa(current, id)) haul.gongfaId = id;
+    else if (art) haul.lingcai += SECRET_DUP_LINGCAI; // 不如己有的折成灵材，理由见 secrets.betterGongfa
   }
 
   let risk = null;
-  if (rnd() < depth.riskChance) {
-    const years = REALMS[state.realm].life * depth.lifeCostRatio;
+  if (rnd() < spec.riskChance) {
+    const years = REALMS[state.realm].life * spec.lifeCostRatio;
     state.age += years;
     const id = SECRET_DEBUFF_IDS[Math.floor(rnd() * SECRET_DEBUFF_IDS.length) % SECRET_DEBUFF_IDS.length];
     const def = DEBUFFS[id];
@@ -2740,24 +2914,123 @@ function resolveExpedition(state, rnd = Math.random) {
     const existing = state.debuffs.find((d) => d.id === id);
     if (existing) existing.remaining += duration;
     else state.debuffs.push({ id, name: def.name, remaining: duration });
-    risk = { years, debuffId: id, debuffName: def.name };
-    applied.push(`折寿 ${Math.round(years)} 载，染上${def.name}`);
+    risk = { layer: e.layer, years, debuffId: id, debuffName: def.name };
   }
 
-  state.lingcai = (state.lingcai ?? 0) + lingcai;
-  applied.unshift(`得灵材 ${lingcai} 枚`);
+  e.texts.push(pickLayerText(e.layer, rnd));
+
+  // 险境 = 强制出关，且未落袋的收获全部损失。折寿与沉疴照样落在身上——
+  // 代价是真的，只有收获是假的，这才是「见好就收」四个字的全部重量
+  if (risk) return forcedExit(state, risk);
+
+  e.awaiting = true;
+  // 夹到 0 而不是留个负数：进度条要走满，界面上也不该出现「还需 −0 载」
+  e.remaining = 0;
+  return { layer: e.layer, awaiting: true, risk: null, haul, text: e.texts[e.texts.length - 1] };
+}
+
+// 险境强制出关。haul 一枚不落地散尽，结算搁进 state.expeditionResult 等 UI 取。
+function forcedExit(state, risk) {
+  const e = state.expedition;
+  const lost = e.haul;
+  const applied = [
+    `探至第 ${e.layer} 层，撞上未散的凶煞`,
+    `折寿 ${Math.round(risk.years)} 载，染上${risk.debuffName}`,
+  ];
+  const dropped = [];
+  if (lost.lingcai > 0) dropped.push(`灵材 ${lost.lingcai} 枚`);
+  if (lost.shentongIds.length > 0) dropped.push(`神通残篇 ${lost.shentongIds.length} 卷`);
+  if (lost.gongfaId) dropped.push('一卷功法');
+  applied.push(dropped.length > 0 ? `${dropped.join('、')}尽数散落，一件也没带出来` : '本就空手，无可再失');
 
   state.expeditionResult = {
-    depthId: depth.id, name: depth.name, years: state.expedition.total,
-    lingcai, risk, applied, ...found,
+    layers: e.layer, banked: false, lingcai: 0,
+    shentongIds: [], gongfaId: null,
+    lost: { lingcai: lost.lingcai, shentongIds: [...lost.shentongIds], gongfaId: lost.gongfaId },
+    risk, texts: [...e.texts], applied,
   };
   state.expedition = null;
   if (state.age >= lifespanCap(state)) state.dead = true;
   return state.expeditionResult;
 }
 
-// UI 取走待展示的结算并清空。只有取走这一条路会清空它：探索可能在玩家离线时完成，
-// 结果就得一直在存档里等着，直到他回来亲眼看见
+// 「再深一层」。第 7 层之后无路可走
+function canDescend(state) {
+  const e = state.expedition;
+  if (!e || !e.awaiting) return false;
+  if (state.dead || state.ascended) return false;
+  return e.layer < SECRET_MAX_LAYER;
+}
+
+// 下一层的路程在踏进去的这一刻现算。玩家可能在洞里突破了境界（探层期间修为照涨，
+// 只是慢），此后每一层都按新境界的尺度算——已经走完的层不追溯，正在走的层不改。
+function descendLayer(state) {
+  if (!canDescend(state)) return { ok: false };
+  const e = state.expedition;
+  e.layer += 1;
+  e.awaiting = false;
+  e.total = layerYears(state);
+  e.remaining = e.total;
+  return { ok: true, layer: e.layer, total: e.total };
+}
+
+// 「就此出关」——落袋的唯一一条路。
+//
+// 神通与功法在这里再判一次重复/降级，不是冗余：探层期间事件照常降临，玩家完全可能
+// 在秘境里靠一桩机缘学到同一门神通、或换到更好的功法，此时行囊里那一卷就从「升级」
+// 变成了「暗刀」。拾取时判过的那一次管的是行囊内部不重复，管不到这段时间里 state
+// 自己的变化。
+function withdrawExpedition(state) {
+  const e = state.expedition;
+  if (!e || !e.awaiting) return null;
+  if (state.dead || state.ascended) return null;
+
+  const haul = e.haul;
+  let lingcai = haul.lingcai;
+  const learned = [];
+  let gongfaId = null;
+  const applied = [];
+
+  for (const id of haul.shentongIds) {
+    const power = SHENTONG.find((s) => s.id === id);
+    if (!power) continue;
+    if (state.shentongIds.includes(id)) {
+      lingcai += SECRET_DUP_LINGCAI;
+      applied.push(`「${power.name}」已在身上，折灵材 ${SECRET_DUP_LINGCAI} 枚`);
+    } else {
+      state.shentongIds.push(id);
+      learned.push(id);
+      applied.push(`习得「${power.name}」`);
+    }
+  }
+
+  if (haul.gongfaId) {
+    const art = GONGFA[haul.gongfaId];
+    if (art && betterGongfa(state.gongfaId, haul.gongfaId)) {
+      gongfaId = haul.gongfaId;
+      state.gongfaId = haul.gongfaId;
+      applied.push(`改修《${art.name}》`);
+    } else if (art) {
+      lingcai += SECRET_DUP_LINGCAI;
+      applied.push(`残卷不及己有，折灵材 ${SECRET_DUP_LINGCAI} 枚`);
+    }
+  }
+
+  state.lingcai = (state.lingcai ?? 0) + lingcai;
+  applied.unshift(`得灵材 ${lingcai} 枚`);
+  applied.unshift(`探至第 ${e.layer} 层，安然出关`);
+
+  state.expeditionResult = {
+    layers: e.layer, banked: true, lingcai,
+    shentongIds: learned, gongfaId,
+    lost: null, risk: null, texts: [...e.texts], applied,
+  };
+  state.expedition = null;
+  return state.expeditionResult;
+}
+
+// UI 取走待展示的结算并清空。只有取走这一条路会清空它：险境强制出关可能发生在玩家
+// 离线时，结果就得一直在存档里等着，直到他回来亲眼看见
 function takeExpeditionResult(state) {
   const result = state.expeditionResult ?? null;
   state.expeditionResult = null;
@@ -2889,14 +3162,11 @@ function chanceLabel(state) {
 // 按钮上的数值全部由 STANCES 现算，不另存一份展示文案——否则调了数值忘了改文案，
 // 玩家读到的取舍就是假的。手机上没有 hover，关键数字必须直接印在按钮上，
 // title 只作桌面端的补充。
-// 事件间隔换算成「机缘频率」(1/interval) 展示：静观天机的卖点是机缘翻倍，
-// 而不是「间隔 ×0.5」——后者要玩家自己在脑子里做一次除法。
 function stanceStats(s) {
   const parts = [];
   if (s.rate !== 1) parts.push(`速×${s.rate}`);
   if (s.age !== 1) parts.push(`寿耗×${s.age}`);
   if (s.breakAdd !== 0) parts.push(`破${s.breakAdd > 0 ? '+' : '−'}${Math.round(Math.abs(s.breakAdd) * 100)}%`);
-  if (s.interval !== 1) parts.push(`缘×${(1 / s.interval).toFixed(1)}`);
   return parts.length > 0 ? parts : ['无偏无倚'];
 }
 
@@ -2953,70 +3223,108 @@ function renderPills(state) {
 
 // ===== 秘境 =====
 //
-// 走 pillStats / stanceStats 的同一套写法：标注由 SECRET_DEPTHS 的声明式字段现算，
-// 不另存一份展示文案，改了数值忘了改文案的事在这里不会发生。
+// 走 pillStats / stanceStats 的同一套写法：标注由 secretLayer 的公式现算，不另存一份
+// 展示文案，改了数值忘了改文案的事在这里不会发生。
 //
-// 耗时必须给绝对年数（而不是「1.5 个小层」）：玩家心里的账是寿元，而寿元的单位是载。
-// 这个数随小层耗时缩放，元婴初期的深入是 96 载，渡劫圆满的同一档是 2387 载——
-// 印在按钮上，玩家一眼就看出这不是随手一点的事。
-// 风险一栏把折寿比例一并印出：这是三种深度真正的分水岭，藏进 title 里等于没说。
-function secretStats(depth, state) {
+// 这四项就是「再深一层」那个决定的全部依据，必须印在按钮上而不是藏进 title：
+// 手机上没有 hover，藏起来等于没说。险境那一栏把折寿比例一并给出——它才是分水岭。
+function layerStats(n) {
+  const spec = secretLayer(n);
+  if (!spec) return [];
   const pct = (v) => `${Math.round(v * 100)}%`;
-  const parts = [`灵材 ${depth.lingcaiMin}~${depth.lingcaiMax}`];
-  if (depth.shentongChance > 0) parts.push(`神通 ${pct(depth.shentongChance)}`);
-  if (depth.gongfaChance > 0) parts.push(`功法 ${pct(depth.gongfaChance)}`);
-  parts.push(depth.riskChance > 0
-    ? `险 ${pct(depth.riskChance)}·寿−${pct(depth.lifeCostRatio)}`
-    : '无险');
-  return parts;
+  return [
+    `灵材 +${spec.lingcai}`,
+    `神通 ${pct(spec.shentongChance)}`,
+    `功法 ${pct(spec.gongfaChance)}`,
+    `险 ${pct(spec.riskChance)}·寿−${pct(spec.lifeCostRatio)}`,
+  ];
 }
 
-// 与 renderPills 同理：按钮只建一次，之后每帧仅切换可用态。
-// 重建的判据是当前小层——耗时那一列随 levelSeconds 缩放，晋一层那个数就过期了。
+// 未落袋的收获，一行说清。这行字是整个玩法的赌注显示器：撞上险境它全归零，
+// 所以哪怕只有灵材一项也要一直摆在眼前。
+function haulLine(haul) {
+  const parts = [`灵材 ${haul.lingcai} 枚`];
+  if (haul.shentongIds.length > 0) parts.push(`神通残篇 ${haul.shentongIds.length} 卷`);
+  if (haul.gongfaId) {
+    const art = GONGFA[haul.gongfaId];
+    parts.push(art ? `《${art.name}》残卷` : '功法残卷');
+  }
+  return parts.join('　');
+}
+
+// 标注只在内容真的变了才重设，判据是一枚指纹。与 renderPills / renderStances 同一条
+// 理由：每帧重设 innerHTML 会让手指按住时的高亮被反复打断。按钮节点本身在模板里，
+// 从不重建，所以点击也绝不会落在被替换掉的节点上。
+function setStats(el, parts) {
+  const stamp = parts.join('|');
+  if (el.dataset.stamp === stamp) return;
+  el.dataset.stamp = stamp;
+  el.innerHTML = parts.map((t) => `<span>${t}</span>`).join('');
+}
+
 function renderSecret(state) {
   const panel = $('secret-panel');
   const unlocked = state.realm >= SECRET_UNLOCK_REALM;
   panel.hidden = !unlocked;
   if (!unlocked) return;
 
-  const going = isExploring(state);
-  const rows = $('secret-rows');
-  const box = $('secret-going');
-  rows.hidden = going;
-  box.hidden = !going;
+  const e = state.expedition;
+  $('secret-enter-box').hidden = !!e;
+  $('secret-going').hidden = !e;
 
-  if (going) {
-    // 全游戏第一个会自己变化的数字。取整规则是「四舍五入，但地板夹到 1」：
-    // 单用 ceil，出发那一刻会报 33 载而按钮上写着 32 载，玩家会以为自己被多收了一年；
-    // 单用 round，最后半年会显示「还需 0 载」却还没回来——那是最不能忍的那种骗人。
-    const depth = findDepth(state.expedition.depthId);
-    const total = state.expedition.total;
-    const done = total > 0 ? Math.max(0, Math.min(1, 1 - state.expedition.remaining / total)) : 1;
-    $('secret-status').innerHTML = `「${depth ? depth.name : '秘境'}」深入探索中，还需 `
-      + `<b>${Math.max(1, Math.round(state.expedition.remaining))}</b> 载`;
-    $('secret-fill').style.width = `${done * 100}%`;
+  if (!e) {
+    // 入口只报第一层的账。整趟能拿多少不该在这里预告——那正是玩家进去以后
+    // 一层一层自己发现的东西，提前摊开就把七个决定压缩回一个了。
+    const btn = $('secret-enter');
+    const ok = canExplore(state);
+    btn.disabled = !ok;
+    btn.classList.toggle('ready', ok);
+    setStats($('secret-enter-stats'), layerStats(1));
+    // 每层耗时必须给绝对年数（而不是「0.4 个小层」）：玩家心里的账是寿元，
+    // 而寿元的单位是载。这个数随境界缩放，元婴初期每层 26 载，渡劫初期每层 637 载。
+    $('secret-enter-note').textContent = `每深一层约 ${Math.round(layerYears(state))} 载，`
+      + `至深 ${SECRET_MAX_LAYER} 层。层层皆可出关，出关方能落袋`;
     return;
   }
 
-  const stamp = `${SECRET_DEPTHS.length}|${levelIndex(state.realm, state.sub)}`;
-  if (rows.dataset.stamp !== stamp) {
-    rows.dataset.stamp = stamp;
-    // aria-label 显式给全，否则读屏念出来的是那句 desc，深度叫什么、要走多少年反而丢了
-    rows.innerHTML = SECRET_DEPTHS.map((d) => {
-      const years = Math.round(expeditionYears(state, d));
-      return `<button type="button" class="secret-btn" data-depth="${d.id}"
-        title="${d.desc}" aria-label="${d.name}，约需 ${years} 载：${secretStats(d, state).join('，')}">
-        <span class="secret-name">${d.name}</span>
-        <span class="secret-effect">${secretStats(d, state).map((t) => `<span>${t}</span>`).join('')}</span>
-        <span class="secret-years">${years} 载</span>
-      </button>`;
-    }).join('');
-  }
-  const ok = canExplore(state);
-  for (const btn of rows.children) {
-    btn.disabled = !ok;
-    btn.classList.toggle('ready', ok);
-  }
+  const awaiting = !!e.awaiting;
+  const done = e.total > 0 ? Math.max(0, Math.min(1, 1 - e.remaining / e.total)) : 1;
+  // 取整规则是「四舍五入，但地板夹到 1」：单用 ceil，踏进一层那一刻会报 27 载而
+  // note 里写着 26 载，玩家会以为自己被多收了一年；单用 round，最后半年会显示
+  // 「还需 0 载」却还没探完——那是最不能忍的那种骗人。
+  $('secret-status').innerHTML = awaiting
+    ? `第 <b>${e.layer}</b> 层已探遍，去留由你`
+    : `正探第 <b>${e.layer}</b> 层，还需 <b>${Math.max(1, Math.round(e.remaining))}</b> 载`;
+  $('secret-fill').style.width = `${(awaiting ? 1 : done) * 100}%`;
+  $('secret-haul').innerHTML = `<span class="haul-label">未落袋</span>${haulLine(e.haul)}`;
+
+  // 白描只在等待决定时显示：它是探完一层的犒赏，也是这个决定的气氛。
+  // 往下钻的路上摆着上一层的见闻，读起来像是在说眼前的事，反而混淆。
+  const text = awaiting ? (e.texts[e.texts.length - 1] ?? '') : '';
+  $('secret-text').textContent = text;
+  $('secret-text').hidden = text === '';
+
+  $('secret-decide').hidden = !awaiting;
+  $('secret-note').textContent = awaiting
+    ? '你退在洞口歇息：修炼如常，灵材照常入囊。不催不逼，想好了再定'
+    : '身在险地，无暇打坐：修炼 ×0.4，灵材亦不入囊中';
+
+  if (!awaiting) return;
+
+  const deeper = $('secret-deeper');
+  const more = canDescend(state);
+  deeper.disabled = !more;
+  deeper.classList.toggle('ready', more);
+  // 名字一栏必须短到不撑破那 7.2em 的列：带上「（第 5 层）」实测会溢出去压在标注上
+  // （.secret-name 是 nowrap，溢出不换行只重叠）。下一层是几层，上面那句
+  // 「第 4 层已探遍」已经说了，不必在按钮上再说一遍。
+  $('secret-deeper-name').textContent = more ? '再深一层' : '已至最深处';
+  setStats($('secret-deeper-stats'), more ? layerStats(e.layer + 1) : ['无路可下，唯有出关']);
+
+  const leave = $('secret-leave');
+  leave.disabled = false;
+  leave.classList.add('ready');
+  setStats($('secret-leave-stats'), [`落袋 ${haulLine(e.haul)}`]);
 }
 
 // ===== 神通的效果标注 =====
@@ -3317,36 +3625,55 @@ function onPillClick(e) {
   render(game);
 }
 
-// 派人进秘境。与炼丹同一套写法：事件委托挂在容器上（renderSecret 会在晋层时重建按钮），
-// 能不能出发只由 startExpedition 一处裁决——界面上按钮已被禁用，两处各判一次
-// 迟早会判出两个不同的答案。
-function onSecretClick(e) {
-  const btn = e.target.closest('.secret-btn');
-  if (!btn) return;
-  const r = startExpedition(game, btn.dataset.depth);
+// 入秘境。能不能入只由 startExpedition 一处裁决——界面上按钮已被禁用，
+// 两处各判一次迟早会判出两个不同的答案。
+function onSecretEnter() {
+  const r = startExpedition(game);
   if (!r.ok) return;
-  pushLog(game, `你收拾行囊，往那座秘境去了。此行${r.depth.name}，约需 ${Math.round(r.total)} 载。`);
+  pushLog(game, `你收拾行囊，独身入了那座秘境。第一层约需 ${Math.round(r.total)} 载。`);
   saveGame(game);
   render(game);
 }
 
-// 归来的一句记事。日志与弹层共用它：即便玩家正好在此刻道消、弹层让位给结局，
+// 「再深一层」。刻意不做二次确认：这个决定本来就没有时限，玩家可以在洞口坐到天荒地老，
+// 真按下去的那一刻他一定是想清楚了的——再弹一个「确定吗」只是不信任他。
+function onSecretDeeper() {
+  const r = descendLayer(game);
+  if (!r.ok) return;
+  pushLog(game, `你把灯芯剪短，往第 ${r.layer} 层去了。这一层约需 ${Math.round(r.total)} 载。`);
+  saveGame(game);
+  render(game);
+}
+
+// 「就此出关」。结算落进 state.expeditionResult，由 loop 下一帧统一弹——与险境强制
+// 出关（可能发生在离线期间）走同一条出口，两条路上玩家看到的东西才逐字相同。
+function onSecretLeave() {
+  if (!withdrawExpedition(game)) return;
+  saveGame(game);
+  render(game);
+}
+
+// 出关的一句记事。日志与弹层共用它：即便玩家正好在此刻道消、弹层让位给结局，
 // 编年史里也不能缺这一笔（否则寿元凭空少一截而无人交代）。
 function expeditionLogLine(r) {
-  return `你自秘境归来，历时 ${Math.round(r.years)} 载。${r.applied.join('，')}。`;
+  return `你自秘境出来，${r.applied.join('，')}。`;
 }
 
 function showExpeditionReturn() {
   const r = takeExpeditionResult(game);
   if (!r) return;
   pushLog(game, expeditionLogLine(r));
-  const risky = r.risk !== null;
+  // 逐层的白描在这里一并回顾。这是离线归来时玩家唯一能读到那些字的地方——
+  // 层进度在他关着标签页时也会推进，那几层的见闻不能就这么无声无息地过去。
+  const travel = r.texts.length > 0
+    ? `<p class="event-text secret-recall">${r.texts.map((t, i) => `${i + 1}　${t}`).join('<br>')}</p>`
+    : '';
   openModal({
-    title: '秘境归来',
-    body: `<p class="event-text">${risky
-      ? '你自那片乱石中爬出来时，身上的血已经干了。所幸不是空手。'
-      : '洞天闭合，风声重归寂静。你抖落一身尘土，回到了旧日打坐的那块青石上。'}</p>
-      <p class="event-text">此行<b>${r.name}</b>，历时 <b>${Math.round(r.years)}</b> 载。</p>
+    title: r.banked ? '秘境出关' : '仓皇而出',
+    body: `<p class="event-text">${r.banked
+      ? '洞天闭合，风声重归寂静。你抖落一身尘土，回到了旧日打坐的那块青石上。'
+      : '你自那片乱石中爬出来时，身上的血已经干了。行囊空空，什么也没带出来。'}</p>
+      ${travel}
       <p class="event-text">${r.applied.map((t) => `· ${t}`).join('<br>')}</p>`,
     actions: [{ label: '归座打坐', onClick: () => { saveGame(game); render(game); } }],
   });
@@ -3377,9 +3704,19 @@ function loop(now) {
   lastFrame = now;
 
   const prevLevel = game.realm * 4 + game.sub;
+  // 探完一层的那一瞬间要记一笔。判据只能是「上一帧还在探、这一帧停在等待决定」——
+  // 层号本身不够：撞上险境是强制出关（expedition 直接变 null），那条路由弹层负责。
+  const wasDescending = !!game.expedition && !game.expedition.awaiting;
   tick(game, dt * speedMultiplier);
   if (game.realm * 4 + game.sub > prevLevel) {
     pushLog(game, `你于青石之上枯坐多载，忽觉丹田一暖，已入${REALMS[game.realm].name}${SUB_NAMES[game.sub]}。`);
+  }
+  // 离线期间探完的那一层拿不到这一笔（applyOffline 在 boot 里就跑完了，没有帧可比），
+  // 那是刻意的：真去补，每次刷新页面都会重记一遍同一层。那几层的白描不会丢——
+  // 它们攒在 expedition.texts 里，出关的弹层会逐层回顾一遍（见 showExpeditionReturn）。
+  if (wasDescending && game.expedition?.awaiting) {
+    pushLog(game, `${game.expedition.texts[game.expedition.texts.length - 1] ?? ''}`
+      + `（已探至第 ${game.expedition.layer} 层，未落袋灵材 ${game.expedition.haul.lingcai} 枚）`);
   }
   if ((game.dead || game.ascended) && !endingShown) showEnding();
   // 弹层优先级：死亡/飞升结局 > 秘境结算 > 事件。
@@ -3482,7 +3819,11 @@ function boot() {
   document.getElementById('breakthrough-btn').addEventListener('click', onBreakthrough);
   document.getElementById('stance-bar').addEventListener('click', onStanceClick);
   document.getElementById('pill-rows').addEventListener('click', onPillClick);
-  document.getElementById('secret-rows').addEventListener('click', onSecretClick);
+  // 三个按钮都在模板里，renderSecret 从不重建它们，所以监听直接挂在按钮上，
+  // 不必像心法 / 丹房那样走容器委托
+  document.getElementById('secret-enter').addEventListener('click', onSecretEnter);
+  document.getElementById('secret-deeper').addEventListener('click', onSecretDeeper);
+  document.getElementById('secret-leave').addEventListener('click', onSecretLeave);
   setupDebugPanel();
   setInterval(() => saveGame(game), SAVE_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(game); });
