@@ -32,14 +32,37 @@ body {
     repeating-linear-gradient(0deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 3px),
     radial-gradient(ellipse at 50% 0%, #1b1611 0%, var(--ink) 60%);
   background-attachment: fixed;
+  /* 整页不滚，橡皮筋回弹只会让固定的顶栏与底部 tab 跟着晃 */
+  overscroll-behavior: none;
 }
-#app { max-width: 960px; margin: 0 auto; padding: 16px; }
+
+/* ===== 单屏骨架 ===== */
+/* 顶栏 / 圆环 / tab 内容区 / 底部 tab 四段纵向排开，整页高度就是一屏，只有第三段会滚。
+   桌面与手机走同一套：限宽 560px 居中，在桌面上验到的就是手机上跑的那一套。
+   高度先写 100vh 再写 100dvh：iOS Safari 的 100vh 把地址栏高度也算进去，
+   底部 tab 会被浏览器工具栏盖住；dvh 是 15.4+ 才有的，vh 那行留给更老的浏览器兜底。
+   左右安全区吃在 #app 的 padding 上（box-sizing 已是 border-box，不会撑破那一屏），
+   上下安全区分别交给顶栏与底部 tab——它们才是真正贴着刘海与 home indicator 的两段。 */
+#app {
+  max-width: 560px;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-left: calc(10px + env(safe-area-inset-left));
+  padding-right: calc(10px + env(safe-area-inset-right));
+}
 #top-bar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
-  border-bottom: 1px solid var(--gold-dim); padding-bottom: 8px;
+  flex: 0 0 auto;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--gold-dim);
+  /* 全屏启动时内容会延伸到刘海底下，用安全区把顶栏顶回来 */
+  padding-top: calc(8px + env(safe-area-inset-top));
+  padding-bottom: 8px;
 }
 #luck-text { color: var(--gold-dim); }
-#body { display: grid; grid-template-columns: 200px 1fr 200px; gap: 16px; margin: 16px 0; }
 .panel { border: 1px solid var(--gold-dim); padding: 10px; margin-bottom: 12px; background: var(--ink-2); }
 /* 无状态时 #debuff-panel 的 innerHTML 为空，不隐藏会剩一个空框 */
 .panel:empty { display: none; }
@@ -56,14 +79,15 @@ body {
 #life-bar.burning { border-color: var(--danger); }
 #life-bar.burning .fill { box-shadow: 0 0 10px rgba(168,50,42,0.95); }
 @keyframes pulse { 50% { opacity: 0.45; } }
-#stage { text-align: center; padding: 24px 0; }
 
-/* ===== 修为圆环 ===== */
-/* 圆环内是绝对定位的浮层：SVG 走文档流撑出 260px 高度，
-   数字压在环内上半部，打坐者占下半部，两者互不遮挡；
-   #overflow-text 留在文档流里，自然落到环下方。 */
-#cult-ring { position: relative; width: 260px; margin: 0 auto; }
-#ring-svg { display: block; width: 260px; height: 260px; overflow: visible; }
+/* ===== 修为圆环（常驻，不随 tab 切换） ===== */
+/* 环从 260px 收到 160px：单屏之后，顶栏 + 环 + 底部 tab 三段固定高度要给 tab 内容区
+   留出至少 500px，260px 的环会把丹房那五行挤到要滚。
+   环内是绝对定位的浮层：SVG 走文档流撑出 160px 高度，数字压在环内上半部，
+   打坐者占下半部，两者互不遮挡；溢出提示挪到了环外（见 template.html）。 */
+#ring-zone { flex: 0 0 auto; text-align: center; padding: 10px 0 6px; }
+#cult-ring { position: relative; width: 160px; margin: 0 auto; }
+#ring-svg { display: block; width: 160px; height: 160px; overflow: visible; }
 .ring-track { fill: none; stroke: #2a2118; stroke-width: 6; }
 .ring-fill {
   fill: none; stroke: var(--gold); stroke-width: 6; stroke-linecap: round;
@@ -103,23 +127,106 @@ body {
 .arm-gap { fill: none; stroke: var(--ink); stroke-width: 10; stroke-linecap: round; }
 #meditator { animation: breathe 4s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: 0.5; } }
+/* 两行数字在环内自上而下排开：修为 34~55px，速率 56~71px，打坐者的头顶在 71px。
+   这几个数是被环的几何量出来的，不是随手写的。金线半径 = 96 / 220 × 160 ≈ 69.8px，
+   环心 (80,80)；后期最宽的一行是千万量级的「6916万 / 7948万」，15px 下实测 114.3px。
+   那一行的中线落在 44.5px 处，离环心 35.5px，该处弦长 2×√(69.8²−35.5²) ≈ 120px，
+   两头各留 3px 的余量。字号也不是随手挑的：24 / 260 与 15 / 160 是同一个比例，
+   环收小之后按原样缩下来就是 15px；试过 16px，最宽的那一行正好与弦等长，
+   行首的「6」当场被金线切掉（实测）。
+   nowrap 是必需的：允许折行会把圆环区撑高一截，而它是常驻不动的那一段。 */
 #cult-text {
-  position: absolute; left: 0; right: 0; top: 52px;
-  font-size: 24px; line-height: 1.4; color: var(--gold); letter-spacing: 1px;
-  font-variant-numeric: tabular-nums;
+  position: absolute; left: 0; right: 0; top: 34px;
+  font-size: 15px; line-height: 1.4; color: var(--gold); letter-spacing: 1px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
   text-shadow: 0 0 12px rgba(201,162,39,0.35);
 }
 #rate-text {
-  position: absolute; left: 0; right: 0; top: 88px;
-  font-size: 12px; line-height: 1.4; opacity: 0.6; font-variant-numeric: tabular-nums;
+  position: absolute; left: 0; right: 0; top: 56px;
+  font-size: 11px; line-height: 1.4; opacity: 0.6; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-/* 留出固定高度，溢出提示出现/消失时突破按钮不会跳动 */
+/* 留出固定高度，溢出提示出现/消失时圆环区不会跳动 */
 #overflow-text {
-  font-size: 12px; line-height: 1.4; min-height: 17px; margin-top: 6px;
+  font-size: 12px; line-height: 1.4; min-height: 17px; margin-top: 4px;
   color: var(--gold); letter-spacing: 1px;
 }
+
+/* ===== tab 内容区 ===== */
+/* 全页唯一会滚的一段。min-height:0 不能省——flex 子项默认按内容撑开，
+   不夹到 0 的话 overflow 永远不生效，整页会跟着一起长高，那正是这次要治的病。
+   自己也是 flex column：编年史那一页要靠它把日志撑满剩余高度。 */
+#tab-content {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column;
+  padding: 10px 0 12px;
+}
+/* 未选中的整页不占位。选择器必须带上 #tab-content 这个 id：编年史那一页下面用
+   `#tab-chronicle { display: flex }` 撑满高度，那是 (1,0,0) 的特异性，会压过
+   `.tab-panel[hidden]` 的 (0,2,0)，于是日志会一直挂在修行页底下露出来（实测如此）。
+   带上父级 id 之后是 (1,1,0)，稳压一头。 */
+#tab-content > .tab-panel[hidden] { display: none; }
+/* 默认按内容自然高度，超出时由 #tab-content 统一滚——身世那一页攒够十几条神通就走这条路 */
+.tab-panel { flex: 0 0 auto; }
+#tab-cultivate { text-align: center; }
+
+/* ===== 底部 tab ===== */
+/* 等分栏：练气三格、金丹四格、元婴五格，格子随解锁自己变窄，不用为每种数目各写一条。
+   46px 高已过 iOS 44px 的下限，再加 padding-bottom 吃掉 home indicator。
+   touch-action / user-select 两条是必需的：前者去掉 300ms 点击延迟（连点会被认成
+   缩放手势），后者防止手指在 tab 上一滑就把标签文字选中、弹出文本选择手柄。 */
+#tab-bar {
+  flex: 0 0 auto;
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  border-top: 1px solid var(--gold-dim);
+  padding-bottom: env(safe-area-inset-bottom);
+  touch-action: manipulation;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.tab-btn {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 46px; padding: 6px 2px;
+  font-family: inherit; font-size: 15px; line-height: 1.3;
+  background: transparent; color: var(--gold-dim);
+  border: 0; cursor: pointer;
+  touch-action: manipulation;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: color 120ms, background 120ms;
+}
+.tab-btn:hover { color: var(--gold); }
+/* 当前这一页：金字 + 淡金底 + 顶上一道金线，与心法 .active、突破 .ready 同一套语汇 */
+.tab-btn.active {
+  color: var(--gold); background: rgba(201,162,39,0.10);
+  box-shadow: inset 0 2px 0 var(--gold);
+}
+.tab-btn:focus-visible { outline: 1px solid var(--gold); outline-offset: -3px; }
+/* 标签自己是定位参照，圆点才能贴住字而不受栏宽、字数影响（「修行」两字，「编年史」三字） */
+.tab-label { position: relative; letter-spacing: 2px; }
+/* 提示点只给两处「你现在该动手」的状态：突破已可冲、秘境某层探完在等决定。
+   丹房与编年史刻意不给——灵材够炼丹几乎是常态、日志几乎每层都更新，
+   常亮的提示点等于噪音。 */
+.tab-dot {
+  display: none;
+  position: absolute; top: -2px; right: -9px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gold); box-shadow: 0 0 6px rgba(201,162,39,0.9);
+  animation: pulse 1.6s infinite;
+}
+.tab-btn.alert .tab-dot { display: block; }
+/* 秘境探层途中的层进度，静默地透到 tab 栏上：宽度 = 本层已走比例，贴着按钮底边。
+   刻意不做呼吸动画——那是给「你该动手了」用的语汇（见 .tab-dot 的 pulse），
+   这里只是让人瞥一眼余光就知道洞里还在走，不是又一次提醒。短过渡即可，
+   不许无限循环。宽度恒为 0 时（不在秘境里）什么都看不见，不用另外藏起来。 */
+.tab-progress {
+  position: absolute; left: 0; bottom: 0; width: 0; height: 2px;
+  background: var(--gold); pointer-events: none;
+  transition: width 120ms linear;
+}
+
+/* ===== 修行 ===== */
 #breakthrough-btn {
-  margin-top: 20px; padding: 10px 32px; font-size: 16px; font-family: inherit;
+  margin-top: 4px; padding: 14px 32px; font-size: 16px; font-family: inherit;
   background: transparent; color: var(--gold-dim); border: 1px solid var(--gold-dim); cursor: not-allowed;
 }
 #breakthrough-btn.ready {
@@ -128,16 +235,16 @@ body {
 }
 /* ===== 心法姿态条 ===== */
 /* auto-fit 一条规则吃下两种布局：心法砍到两门之后，空轨道被 auto-fit 收掉、1fr 把余量
-   分给剩下两格，于是桌面（#stage 约 496px）与手机 375px 下都是各占一半的两个大格子，
+   分给剩下两格，于是桌面（限宽 560px）与手机 375px 下都是各占一半的两个大格子，
    远超 44px 触摸目标。将来若再添一门，这条规则不用改。 */
 #stance-bar {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-  gap: 6px; margin-top: 18px;
+  gap: 8px; margin-top: 14px;
 }
 .stance-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  min-height: 46px; padding: 6px 4px;
-  font-family: inherit; font-size: 14px; line-height: 1.3;
+  min-height: 48px; padding: 6px 4px;
+  font-family: inherit; font-size: 15px; line-height: 1.3;
   background: transparent; color: var(--gold-dim);
   border: 1px solid var(--gold-dim); cursor: pointer;
   transition: color 120ms, border-color 120ms, background 120ms;
@@ -155,24 +262,25 @@ body {
 }
 /* 换行只在数值之间发生，「寿耗×0.45」自己不能被拦腰截断 */
 .stance-stats span { white-space: nowrap; }
-/* 定高，切换心法时下方的日志不会跟着上下跳 */
+/* 定高，切换心法时下方的运功按钮不会跟着上下跳 */
 #stance-desc {
-  margin-top: 8px; min-height: 36px; font-size: 12px; line-height: 1.5;
+  margin-top: 8px; min-height: 40px; font-size: 12px; line-height: 1.5;
   color: var(--gold-dim); letter-spacing: 0.5px;
 }
 
 /* ===== 长按运功 ===== */
-/* 全游戏唯一需要「按住不放」的控件，所以做得比心法按钮更大更实：整条 52px 高的横条
-   都是触摸目标（手机上 56px），名字与标注并排居中——按住的时候眼睛在圆环上，
-   按钮只需要一个够大、不用瞄的落点。
+/* 全游戏唯一需要「按住不放」的控件，所以做得比心法按钮更大更实：整条 56px 高的横条
+   都是触摸目标，名字与标注并排居中——按住的时候眼睛在圆环上，
+   按钮只需要一个够大、不用瞄的落点；滑动中途也不能脱靶（真脱靶了也有
+   setPointerCapture 兜着，见 main.js）。
    下面三条移动端属性都是必需的，缺一条长按就会被系统抢走：
      touch-action: manipulation   去掉 300ms 点击延迟与双击缩放（连点会被认成缩放手势）
      user-select: none            长按不要把「运功」二字选中、不要弹出文本选择手柄
      -webkit-touch-callout: none  iOS 长按不要弹系统菜单——那会当场打断加速 */
 #boost-btn {
   display: flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; min-height: 52px; margin-top: 12px; padding: 8px 12px;
-  font-family: inherit; font-size: 16px; line-height: 1.3;
+  width: 100%; min-height: 56px; margin-top: 10px; padding: 8px 12px;
+  font-family: inherit; font-size: 17px; line-height: 1.3;
   background: transparent; color: var(--gold-dim);
   border: 1px solid var(--gold-dim); cursor: pointer;
   touch-action: manipulation;
@@ -206,23 +314,22 @@ body {
 #boost-note { margin-top: 6px; font-size: 11px; opacity: 0.55; letter-spacing: 0.5px; }
 
 /* ===== 丹房 ===== */
-/* 面板在 #stage 内部（居中排版的地盘），这里把文字掰回左对齐：
-   五行丹药是一张要横着扫的表，居中会让名字、效果、价钱三列全部对不齐。 */
 #pill-panel {
-  margin-top: 18px; padding: 10px; text-align: left;
+  padding: 10px; text-align: left;
   border: 1px solid var(--gold-dim); background: var(--ink-2);
 }
 #pill-panel[hidden] { display: none; }
 /* 灵材数额挂在「丹房」二字旁边。panel-title 的 4px 字距会把这行拉散，就地清掉 */
 .pill-sum { margin-left: 8px; font-size: 11px; letter-spacing: 0; opacity: 0.8; }
 .pill-sum b { color: var(--gold); font-variant-numeric: tabular-nums; }
-/* 整行即按钮：桌面上一行扫完三列信息，手机上整条 44px 高的横条都是触摸目标，
-   不必去够行尾一个小方块。名字列定宽 3.6em（五味丹名都是三字）让效果列对齐，
-   价钱列压在最右，玩家竖着一眼就能比出贵贱。 */
+/* 整行即按钮：一行扫完三列信息，整条 48px 高的横条都是触摸目标，
+   不必去够行尾一个小方块；行距 6px 防误触——炼错一颗就是几十枚灵材白扔。
+   名字列定宽 3.6em（五味丹名都是三字）让效果列对齐，价钱列压在最右，
+   玩家竖着一眼就能比出贵贱。 */
 .pill-btn {
   display: grid; grid-template-columns: 3.6em 1fr auto; align-items: center; gap: 8px;
-  width: 100%; min-height: 44px; margin: 4px 0; padding: 6px 10px;
-  font-family: inherit; font-size: 14px; line-height: 1.3; text-align: left;
+  width: 100%; min-height: 48px; margin: 6px 0; padding: 6px 10px;
+  font-family: inherit; font-size: 15px; line-height: 1.3; text-align: left;
   background: transparent; color: var(--gold-dim);
   border: 1px solid var(--gold-dim); cursor: pointer;
   transition: color 120ms, border-color 120ms, background 120ms;
@@ -247,20 +354,19 @@ body {
 .pill-btn:disabled .pill-cost { color: var(--gold-dim); }
 
 /* ===== 秘境 ===== */
-/* 与丹房同一套骨架（面板在 #stage 内部，文字掰回左对齐），只是列宽不同：
-   名字列 7.2em 容得下「再深一层（第 7 层）」，标注列吃掉剩下的宽度。
-   没有第三列——上一版最右那列印的是「去不去」要看的耗时，而如今耗时每层都一样，
-   要看的是四项收益与险率，它们全在标注列里。 */
+/* 与丹房同一套骨架，只是列宽不同：名字列 7.2em 容得下「已至最深处」，
+   标注列吃掉剩下的宽度。没有第三列——上一版最右那列印的是「去不去」要看的耗时，
+   而如今耗时每层都一样，要看的是四项收益与险率，它们全在标注列里。 */
 #secret-panel {
-  margin-top: 18px; padding: 10px; text-align: left;
+  padding: 10px; text-align: left;
   border: 1px solid var(--gold-dim); background: var(--ink-2);
 }
 #secret-panel[hidden], #secret-enter-box[hidden], #secret-going[hidden],
 #secret-decide[hidden], #secret-text[hidden] { display: none; }
 .secret-btn {
   display: grid; grid-template-columns: 7.2em 1fr; align-items: center; gap: 8px;
-  width: 100%; min-height: 44px; margin: 4px 0; padding: 6px 10px;
-  font-family: inherit; font-size: 14px; line-height: 1.3; text-align: left;
+  width: 100%; min-height: 48px; margin: 6px 0; padding: 6px 10px;
+  font-family: inherit; font-size: 15px; line-height: 1.3; text-align: left;
   background: transparent; color: var(--gold-dim);
   border: 1px solid var(--gold-dim); cursor: pointer;
   transition: color 120ms, border-color 120ms, background 120ms;
@@ -270,11 +376,16 @@ body {
   display: flex; flex-wrap: wrap; gap: 0 6px;
   font-size: 11px; opacity: 0.75; font-variant-numeric: tabular-nums;
 }
-/* 换行只在标注之间发生，「险 40%·寿−8%」自己不能被拦腰截断 */
+/* 换行只在标注之间发生，「险 40%·寿−8%」自己不能被拦腰截断。
+   375px 下净宽约 331px：名字列 115px，标注列剩约 200px，
+   「灵材 +19 / 神通 20% / 功法 10% / 险 40%·寿−8%」会自己折成两行，绝不横向溢出。 */
 .secret-effect span { white-space: nowrap; }
 .secret-btn.ready:hover { border-color: var(--gold); background: rgba(201,162,39,0.08); }
 .secret-btn.ready { color: var(--gold); border-color: var(--gold-dim); }
 .secret-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* 两个决定按钮之间多留一道，防手指连击——「再深一层」与「就此出关」贴着摆，
+   点错一个就是几十枚灵材连本带利地没了，这是全局最不能误触的地方 */
+#secret-decide .secret-btn + .secret-btn { margin-top: 10px; }
 /* 层进度。这是全游戏第一个会自己推进的进度条，所以它要比寿元条更显眼一点：
    金线加一道辉光，宽度过渡跟着 .fill 的 120ms 走，肉眼能看出它在动。 */
 #secret-going { padding: 4px 2px 2px; }
@@ -306,11 +417,10 @@ body {
 .secret-recall { font-size: 13px; line-height: 1.9; opacity: 0.78; text-align: left; }
 
 /* ===== 神通列表 ===== */
-/* 神通能攒到十几条，一条一行 desc 会把侧栏撑成几屏高。改成一行一条：
-   名字做钉子靠左，数值标注压到右侧。侧栏净宽只有 178px，是这里所有尺寸的来源：
-   名字用 13px + 6px 内边距时，全表最长的太乙分光（四字名 + 三段标注）实测要 179px，
-   差 1px 就折成两行；降到 12px / 5px 并把标注间距收到 4px 之后是 171px，留 7px 余量。
-   .st-stats 仍留着 flex-wrap 兜底：将来真有更长的条目，宁可它自己折行，也不许横向溢出。 */
+/* 神通能攒到十几条，一条一行 desc 会把这一页撑成几屏高。改成一行一条：
+   名字做钉子靠左，数值标注压到右侧。全表最长的太乙分光（四字名 + 三段标注）在
+   限宽 560px 与 375px 下都排得进一行；.st-stats 仍留着 flex-wrap 兜底：
+   将来真有更长的条目，宁可它自己折行，也不许横向溢出。 */
 .st-row { display: flex; align-items: center; justify-content: space-between; gap: 5px; margin: 3px 0; }
 .st-name { font-size: 12px; padding: 1px 5px; margin: 0; white-space: nowrap; }
 .st-stats {
@@ -325,24 +435,39 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== 观星术预告 ===== */
-#omen { margin: 0 0 6px; font-size: 13px; letter-spacing: 1px; }
+/* ===== 编年史 ===== */
+/* 这一页整个撑满 tab 内容区，日志自己滚（renderLog 每帧把它顶到底部）。
+   外层 #tab-content 因此滚不动——只有一个滚动条，落在日志上，正是玩家想翻的地方。 */
+#tab-chronicle { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* 观星术的预告。紧挨编年史：一个说下一桩将至，一个记已了之事，读起来是同一条时间线。
+   没有这门神通时 render 会把它清空，:empty 直接收掉，不占位。 */
+#omen { flex: 0 0 auto; margin: 0 0 6px; font-size: 13px; letter-spacing: 1px; }
 #omen:empty { display: none; }
 .omen-label { color: var(--gold-dim); margin-right: 8px; }
 .omen-fortune { color: var(--gold); }
 .omen-tribulation { color: var(--danger); }
 
-#log-panel { height: 160px; overflow-y: auto; border-top: 1px solid var(--gold-dim); padding-top: 8px; font-size: 13px; }
+#log-panel {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  border-top: 1px solid var(--gold-dim); padding-top: 8px; font-size: 13px;
+}
 .log-line { margin: 3px 0; }
 .log-age { color: var(--gold-dim); margin-right: 8px; }
 
+/* ===== 弹层 ===== */
+/* 挂在 #modal-root 里、position:fixed 铺满视口，与 tab 无关：
+   在丹房页触发的事件照样正常弹出、正常结算。 */
 .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; z-index: 10; }
-.modal { width: min(480px, 88vw); background: var(--ink-2); border: 1px solid var(--gold); padding: 24px; }
+/* 高度封顶并自己滚：整页收成一屏之后 body 再也不滚了，结局弹层带着道韵升级表能有
+   四百多像素高，横屏或小屏上一旦超出视口就再也够不着那个「转世重修」。
+   与 #app 同理，先 vh 后 dvh。 */
+.modal { width: min(480px, 88vw); max-height: 88vh; max-height: 88dvh; overflow-y: auto; background: var(--ink-2); border: 1px solid var(--gold); padding: 24px; }
 .modal-title { color: var(--gold); font-size: 20px; letter-spacing: 6px; text-align: center; margin-bottom: 16px; }
 .modal-body { line-height: 1.9; margin-bottom: 20px; }
 .event-text { text-indent: 2em; margin: 0; }
 .modal-actions { display: flex; flex-direction: column; gap: 8px; }
-.modal-btn { padding: 10px; font-family: inherit; font-size: 14px; background: transparent; color: var(--text); border: 1px solid var(--gold-dim); cursor: pointer; }
+/* iOS 建议触摸目标不小于 44px，弹窗按钮是全局最需要点准的地方 */
+.modal-btn { padding: 14px 10px; font-family: inherit; font-size: 15px; background: transparent; color: var(--text); border: 1px solid var(--gold-dim); cursor: pointer; }
 .modal-btn:hover { color: var(--gold); border-color: var(--gold); background: rgba(201,162,39,0.08); }
 
 #upgrade-box { margin-top: 16px; border-top: 1px solid var(--gold-dim); padding-top: 12px; }
@@ -352,68 +477,23 @@ body {
 .upgrade-btn { min-width: 48px; padding: 3px 8px; font-family: inherit; background: transparent; color: var(--gold); border: 1px solid var(--gold-dim); cursor: pointer; }
 .upgrade-btn:disabled { color: var(--gold-dim); cursor: not-allowed; }
 
-@media (max-width: 720px) {
-  /* 全屏启动时内容会延伸到刘海与底部横条下面，用安全区把顶栏顶回来 */
-  #app {
-    padding: calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right))
-             calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
-  }
-  #top-bar { font-size: 14px; gap: 4px 12px; }
-
-  /* 手机上重排整页顺序：圆环 → 突破 → 日志 → 参考面板。
-     日志是事件结果与晋级反馈的唯一出口，塌成一栏后若仍排在
-     灵根/天赋/功法/神通之后，它会落到 1000px 开外的位置，
-     每看一条都要长划。参考面板才是偶尔查一次的东西，放最后。
-     #body 用 display:contents 摊平，让它的子元素直接参与 #app 的排序。 */
-  #app { display: flex; flex-direction: column; }
-  #body { display: contents; }
-  #top-bar   { order: 0; }
-  #stage     { order: 1; padding: 12px 0 4px; }
-  /* 预告与日志同 order：等值时按源码顺序排，预告自然落在日志正上方。
-     不写这条的话它会退回默认 order:0，被顶到跟顶栏一堆去 */
-  #omen      { order: 2; }
-  #log-panel { order: 2; margin-bottom: 16px; }
-  #left-col  { order: 3; }
-  #right-col { order: 4; }
-
-  /* iOS 建议触摸目标不小于 44px，弹窗按钮是全局最需要点准的地方 */
-  .modal-btn { padding: 14px 10px; font-size: 15px; }
-  #breakthrough-btn { padding: 14px 32px; }
-  /* 心法条留在 #stage 内部，随 order:1 跟着突破按钮走，不会掉到日志之后。
-     这里只把触摸目标放大：两格各占一半宽、48px 高，间距拉到 8px 防误触。 */
-  #stance-bar { gap: 8px; margin-top: 14px; }
-  .stance-btn { min-height: 48px; font-size: 15px; }
-  #stance-desc { min-height: 40px; }
-  /* 运功按钮同样留在 #stage 内部，随 order:1 跟着突破按钮走。这里只放大触摸目标：
-     56px 高，远超 44px 的下限——它是唯一要按住不放的控件，手指落点得宽裕，
-     且滑动中途也不能脱靶（真脱靶了也有 setPointerCapture 兜着，见 main.js） */
-  #boost-btn { min-height: 56px; margin-top: 10px; font-size: 17px; }
-  /* 丹房同样留在 #stage 内部，随 order:1 跟着突破按钮走。这里只放大触摸目标：
-     每行 48px 高、行距拉到 6px 防误触——炼错一颗就是几十枚灵材白扔 */
-  #pill-panel { margin-top: 14px; }
-  .pill-btn { min-height: 48px; margin: 6px 0; font-size: 15px; }
-  .pill-effect { font-size: 11px; }
-  /* 秘境同样留在 #stage 内部，随 order:1 跟着突破按钮走。这里只放大触摸目标：
-     每行 48px 高、行距 6px 防误触——「再深一层」与「就此出关」贴着摆，点错一个
-     就是几十枚灵材连本带利地没了，这两个按钮是全局最不能误触的地方。
-     375px 下净宽约 311px：名字列 108px，标注列剩约 195px，
-     「灵材 +19 / 神通 20% / 功法 10% / 险 40%·寿−8%」会自己折成两行，
-     由 flex-wrap 兜住，绝不横向溢出。 */
-  #secret-panel { margin-top: 14px; }
-  .secret-btn { min-height: 48px; margin: 6px 0; font-size: 15px; }
-  .secret-effect { font-size: 11px; }
-  /* 两个决定按钮之间多留一道，防手指连击 */
-  #secret-decide .secret-btn + .secret-btn { margin-top: 10px; }
-}
-
 /* 关掉双击缩放与 300ms 点击延迟，手机上连点会被识别成缩放手势 */
 button, .modal-btn, .upgrade-btn { touch-action: manipulation; }
 
-/* 调试面板：随生产构建发布，按 ~ 开关。刻意用扎眼的终端绿，与水墨主题划清界限 */
+/* 调试面板：随生产构建发布，按 ~ 开关。刻意用扎眼的终端绿，与水墨主题划清界限。
+   bottom 必须落在底部 tab 栏上方，不是贴着视口底边——按钮高 46px + 顶边框 1px +
+   底部安全区，是那一条栏真实占的高度；否则单屏重构之后它正好盖住最右两格 tab，
+   而那两格恰恰是要点的东西。max-height + 自滚是防窄屏：内容一多，面板顶边不许
+   探到视口外面去。 */
 #debug-panel {
-  position: fixed; right: 12px; bottom: 12px; z-index: 20;
+  position: fixed; right: 12px;
+  bottom: calc(46px + 1px + env(safe-area-inset-bottom) + 12px);
+  z-index: 20;
   background: #000; border: 1px solid #3a5; color: #6c9; padding: 12px;
   font-family: ui-monospace, monospace; font-size: 12px; max-width: 300px;
+  max-height: calc(100vh - 46px - 1px - env(safe-area-inset-bottom) - 24px);
+  max-height: calc(100dvh - 46px - 1px - env(safe-area-inset-bottom) - 24px);
+  overflow-y: auto;
 }
 #debug-panel button { display: block; width: 100%; margin: 4px 0; font-family: inherit; background: #111; color: #6c9; border: 1px solid #3a5; cursor: pointer; padding: 4px; }
 #debug-panel input { width: 70px; background: #111; color: #6c9; border: 1px solid #3a5; }
@@ -423,6 +503,8 @@ button, .modal-btn, .upgrade-btn { touch-action: manipulation; }
 </style>
 </head>
 <body>
+<!-- 单屏布局：顶栏 / 圆环 / tab 内容区 / 底部 tab，四段纵向排开，只有第三段会滚。
+     上一版是一长条，丹房与秘境排在千把像素开外，玩家实测的原话是「操作不方便」。 -->
 <div id="app">
   <header id="top-bar">
     <span id="dao-hao">无名散修</span>
@@ -433,62 +515,69 @@ button, .modal-btn, .upgrade-btn { touch-action: manipulation; }
     <span id="lingcai-text">灵材 0</span>
   </header>
 
-  <div id="body">
-    <aside id="left-col">
-      <section id="spirit-panel" class="panel"></section>
-      <section id="talent-panel" class="panel"></section>
-    </aside>
+  <!-- 圆环常驻，刻意不进 tab。长按运功时环会急转、数字跳变、寿元条转红，
+       那是全游戏唯一的实时反馈；藏进某个 tab 里，这个功能就废了。 -->
+  <div id="ring-zone">
+    <div id="cult-ring">
+      <svg viewBox="0 0 220 220" id="ring-svg" aria-hidden="true">
+        <circle cx="110" cy="110" r="96" class="ring-track"/>
+        <circle cx="110" cy="110" r="96" class="ring-fill" id="ring-fill"/>
+        <circle cx="110" cy="110" r="86" class="ring-aura" id="ring-aura"/>
+        <!-- 打坐剪影。这个尺寸下能读出「人」全靠三处对比：细长的颈、
+             直筒不外扩的躯干、明显宽于躯干的盘膝。双臂先描一道底色粗线再压金线，
+             臂与躯干之间才会留出空隙——没有这道空隙，整个人就是一口钟。 -->
+        <g id="meditator" transform="translate(110,157) scale(1.15)">
+          <path class="fig" d="M5,-38 L5,-28 C12,-27 17,-24 17,-17 L18,6 L-18,6 L-17,-17 C-17,-24 -12,-27 -5,-28 L-5,-38 Z"/>
+          <path class="arm-gap" d="M15,-21 Q40,-5 4,7"/>
+          <path class="arm-gap" d="M-15,-21 Q-40,-5 -4,7"/>
+          <path class="arm" d="M15,-21 Q40,-5 4,7"/>
+          <path class="arm" d="M-15,-21 Q-40,-5 -4,7"/>
+          <path class="fig" d="M-36,10 Q-30,-6 0,0 Q30,-6 36,10 Q0,26 -36,10 Z"/>
+          <circle cx="0" cy="-42" r="9.5" class="fig"/>
+        </g>
+      </svg>
+      <div id="cult-text">0 / 100</div>
+      <div id="rate-text"></div>
+    </div>
+    <!-- 溢出提示挪到环外面。环收到 160px 之后，「溢出 1.25 倍　突破 +30%（已封顶）」
+         在 160px 宽的盒子里要折三行，圆环区的高度就跟着跳了。摆在环下、按整幅宽度排，
+         它才始终是一行。 -->
+    <div id="overflow-text"></div>
+  </div>
 
-    <main id="stage">
-      <div id="cult-ring">
-        <svg viewBox="0 0 220 220" id="ring-svg" aria-hidden="true">
-          <circle cx="110" cy="110" r="96" class="ring-track"/>
-          <circle cx="110" cy="110" r="96" class="ring-fill" id="ring-fill"/>
-          <circle cx="110" cy="110" r="86" class="ring-aura" id="ring-aura"/>
-          <!-- 打坐剪影。这个尺寸下能读出「人」全靠三处对比：细长的颈、
-               直筒不外扩的躯干、明显宽于躯干的盘膝。双臂先描一道底色粗线再压金线，
-               臂与躯干之间才会留出空隙——没有这道空隙，整个人就是一口钟。 -->
-          <g id="meditator" transform="translate(110,157) scale(1.15)">
-            <path class="fig" d="M5,-38 L5,-28 C12,-27 17,-24 17,-17 L18,6 L-18,6 L-17,-17 C-17,-24 -12,-27 -5,-28 L-5,-38 Z"/>
-            <path class="arm-gap" d="M15,-21 Q40,-5 4,7"/>
-            <path class="arm-gap" d="M-15,-21 Q-40,-5 -4,7"/>
-            <path class="arm" d="M15,-21 Q40,-5 4,7"/>
-            <path class="arm" d="M-15,-21 Q-40,-5 -4,7"/>
-            <path class="fig" d="M-36,10 Q-30,-6 0,0 Q30,-6 36,10 Q0,26 -36,10 Z"/>
-            <circle cx="0" cy="-42" r="9.5" class="fig"/>
-          </g>
-        </svg>
-        <div id="cult-text">0 / 100</div>
-        <div id="rate-text"></div>
-        <div id="overflow-text"></div>
-      </div>
+  <!-- 唯一会滚的一段。通常滚不动——五个 tab 的内容都按一屏之内设计，
+       只有身世 tab 攒够十几条神通时才会真的滚起来。 -->
+  <main id="tab-content">
+    <section class="tab-panel" id="tab-cultivate" data-tab="cultivate" role="tabpanel" aria-label="修行">
       <button id="breakthrough-btn" disabled>修为未足</button>
-      <!-- 心法姿态条。刻意留在 #stage 内部：手机端用 flex order 重排的是
-           #stage / #log-panel / 两侧栏这几个块，心法属于操作区，跟着突破按钮
-           一起走，才不会掉到日志后面去。 -->
+      <!-- 心法姿态条。与突破、运功同属「此刻怎么修」，三者必须同屏可见，
+           所以整组留在修行 tab 里，不拆到别处去。 -->
       <div id="stance-bar" role="group" aria-label="心法姿态"></div>
       <div id="stance-desc"></div>
       <!-- 长按运功。刻意做成一个动作而不是一门心法：按住则快，松手即停，不留心智负担。
            摆在心法条正下方，因为它与心法相乘——上面选的是「常态怎么修」，这里是
-           「此刻冲一下」。同样留在 #stage 内部，随 order:1 跟着突破按钮走。
-           按钮上的两个数字由 render 从常量现算，这里不写死。 -->
+           「此刻冲一下」。按钮上的两个数字由 render 从常量现算，这里不写死。 -->
       <button type="button" id="boost-btn">
         <span class="boost-name">运 功</span>
         <span class="boost-stats" id="boost-stats"></span>
       </button>
       <div id="boost-note">按住即行功，松手即止</div>
-      <!-- 丹房。同样刻意留在 #stage 内部：炼丹是操作而非参考，手机端要跟着
-           突破按钮一起走，不能掉到日志后面去。金丹之前 render 会把它整个 hidden。
-           灵材数额在顶栏已有一份，这里再挂一份——决定「炼哪一颗」时眼睛正落在这，
-           不该逼玩家把视线甩回页首。 -->
+    </section>
+
+    <!-- 丹房。金丹之前 renderTabs 连 tab 都不挂，这一整段自然也见不着。
+         灵材数额在顶栏已有一份，这里再挂一份——决定「炼哪一颗」时眼睛正落在这，
+         不该逼玩家把视线甩回页首。 -->
+    <section class="tab-panel" id="tab-pills" data-tab="pills" role="tabpanel" aria-label="丹房" hidden>
       <section id="pill-panel" hidden>
         <div class="panel-title">丹房<span class="pill-sum">灵材 <b id="pill-lingcai">0</b></span></div>
         <div id="pill-rows" role="group" aria-label="炼丹"></div>
       </section>
-      <!-- 秘境。同样刻意留在 #stage 内部：往下钻是操作而非参考，手机端要跟着
-           突破按钮一起走。元婴之前 render 会把它整个 hidden。
-           入秘境之后入口让位给层进度；一层探完，两个决定按钮就地出现——
-           刻意不用弹层：弹层会打断挂机，而这是个可以慢慢想的决定，不设超时。 -->
+    </section>
+
+    <!-- 秘境。元婴之前 renderTabs 连 tab 都不挂。
+         入秘境之后入口让位给层进度；一层探完，两个决定按钮就地出现——
+         刻意不用弹层：弹层会打断挂机，而这是个可以慢慢想的决定，不设超时。 -->
+    <section class="tab-panel" id="tab-secret" data-tab="secret" role="tabpanel" aria-label="秘境" hidden>
       <section id="secret-panel" hidden>
         <div class="panel-title">秘境</div>
         <div id="secret-enter-box">
@@ -516,20 +605,29 @@ button, .modal-btn, .upgrade-btn { touch-action: manipulation; }
           <div class="secret-note" id="secret-note"></div>
         </div>
       </section>
-    </main>
+    </section>
 
-    <aside id="right-col">
+    <!-- 身世。灵根、天赋、功法、神通、状态——一局里查得最少的五样，
+         上一版分踞左右两栏，如今合成一页。 -->
+    <section class="tab-panel" id="tab-self" data-tab="self" role="tabpanel" aria-label="身世" hidden>
+      <section id="spirit-panel" class="panel"></section>
+      <section id="talent-panel" class="panel"></section>
       <section id="gongfa-panel" class="panel"></section>
       <section id="shentong-panel" class="panel"></section>
       <section id="debuff-panel" class="panel"></section>
-    </aside>
-  </div>
+    </section>
 
-  <!-- 观星术的预告。紧挨编年史：一个说下一桩将至，一个记已了之事，读起来是同一条时间线。
-       没有这门神通时 render 会把它清空，:empty 直接收掉，不占位。 -->
-  <div id="omen"></div>
+    <!-- 编年史。观星术的预告紧挨日志：一个说下一桩将至，一个记已了之事，
+         读起来是同一条时间线。没有那门神通时 render 会把预告清空，:empty 直接收掉。 -->
+    <section class="tab-panel" id="tab-chronicle" data-tab="chronicle" role="tabpanel" aria-label="编年史" hidden>
+      <div id="omen"></div>
+      <div id="log-panel"></div>
+    </section>
+  </main>
 
-  <footer id="log-panel"></footer>
+  <!-- 底部 tab。按钮由 renderTabs 按境界现挂：练气只有三个，金丹添丹房，
+       元婴添秘境——解锁本身就是一种进展感，所以未解锁的整个不渲染，不留灰占位。 -->
+  <nav id="tab-bar" role="tablist" aria-label="主面板"></nav>
 </div>
 <div id="debug-panel" hidden>
   <div class="debug-title">调试面板（~ 开关）</div>
@@ -3386,6 +3484,12 @@ function setStats(el, parts) {
   el.innerHTML = parts.map((t) => `<span>${t}</span>`).join('');
 }
 
+// 本层已走的比例。单独抽出来是因为 secretTabState（底部 tab 上的细线）要与这里
+// 的层进度条共用同一套算法，不许两处各算一次、算出两个对不上的数。
+function layerProgress(e) {
+  return e.total > 0 ? Math.max(0, Math.min(1, 1 - e.remaining / e.total)) : 1;
+}
+
 function renderSecret(state) {
   const panel = $('secret-panel');
   const unlocked = state.realm >= SECRET_UNLOCK_REALM;
@@ -3412,7 +3516,7 @@ function renderSecret(state) {
   }
 
   const awaiting = !!e.awaiting;
-  const done = e.total > 0 ? Math.max(0, Math.min(1, 1 - e.remaining / e.total)) : 1;
+  const done = layerProgress(e);
   // 取整规则是「四舍五入，但地板夹到 1」：单用 ceil，踏进一层那一刻会报 27 载而
   // note 里写着 26 载，玩家会以为自己被多收了一年；单用 round，最后半年会显示
   // 「还需 0 载」却还没探完——那是最不能忍的那种骗人。
@@ -3574,6 +3678,129 @@ function renderBoost(state) {
   $('life-bar').classList.toggle('burning', on);
 }
 
+// ===== 底部 tab =====
+//
+// 玩家实测后的原话：「整个页面排版重构一下，现在重要的丹房，秘境都在下方，操作不方便；
+// 我建议只保留一页不用上下滑，底部有tab可以切换」。于是整页收成一屏：顶栏与圆环常驻，
+// 中间那一段按 tab 换内容。圆环刻意不进 tab——长按运功时环急转、数字跳变、寿元条转红，
+// 那是全游戏唯一的实时反馈，藏起来这个功能就废了。
+//
+// 解锁条件直接复用两张数据表里的常量，不在这里另存一份：丹房跟着 PILL_UNLOCK_REALM
+// （金丹），秘境跟着 SECRET_UNLOCK_REALM（元婴）。改了数据表这里自动跟上，
+// 不会出现「面板解锁了但 tab 还没冒出来」这种两处各判一次的错位。
+const TAB_DEFS = [
+  { id: 'cultivate', label: '修行' },
+  { id: 'pills',     label: '丹房',   unlockRealm: PILL_UNLOCK_REALM },
+  { id: 'secret',    label: '秘境',   unlockRealm: SECRET_UNLOCK_REALM },
+  { id: 'self',      label: '身世' },
+  { id: 'chronicle', label: '编年史' },
+];
+
+const DEFAULT_TAB = 'cultivate';
+
+// 未解锁的整个不渲染，不留灰色占位：早期只有三个 tab，随境界长到五个——
+// 那一格凭空多出来，本身就是一次进展的通知。灰着摆在那里只是提前剧透。
+function visibleTabs(state) {
+  const realm = state?.realm ?? 0;
+  return TAB_DEFS.filter((t) => t.unlockRealm === undefined || realm >= t.unlockRealm);
+}
+
+// 提示点。只给两处「你现在该动手」的状态：
+//   修行 —— 突破已经可以冲了（玩家在别的 tab 里看不见那个按钮亮起来）
+//   秘境 —— 某层探完，正停在洞口等他决定去留（这个决定没有时限，会一直等）
+// 刻意不给丹房与编年史：灵材够炼丹几乎是常态、日志几乎每层都更新，
+// 常亮的提示点等于噪音，两个月后玩家就再也不看它了。
+function tabAlert(state, id) {
+  if (id === 'cultivate') return canBreakthrough(state);
+  if (id === 'secret') return !!state.expedition?.awaiting;
+  return false;
+}
+
+// 秘境 tab 的进行态：重构前那根会自己走的层进度条常驻可见，是全游戏唯一有
+// 「正在发生」感的东西；重构后它整个躲进秘境 tab，玩家在别的 tab 上完全看不见
+// 洞里的事走到哪。这个函数把「该在 tab 上透出多少」压成两个数，静默地透——
+// label 带层号（探层中、等待决定时都带，不在洞里就是「秘境」两字），progress
+// 是本层已走比例（不在洞里是 null，等待决定视作走满）。和 tabAlert 一样是纯函数，
+// 断言直接钉这个函数，不用去翻 DOM。
+function secretTabState(state) {
+  const e = state.expedition;
+  if (!e) return { label: '秘境', progress: null };
+  return { label: `秘境 ${e.layer}`, progress: e.awaiting ? 1 : layerProgress(e) };
+}
+
+// 停留的那一页可能会消失：清档重来退回练气，而玩家上一世正停在丹房。
+// 此时退回修行，而不是把一个没有内容的空页面留在那。
+function resolveTab(state, wanted) {
+  return visibleTabs(state).some((t) => t.id === wanted) ? wanted : DEFAULT_TAB;
+}
+
+// 当前 tab 是界面偏好而不是存档内容，所以放模块级变量而不是 state：
+// 它不该跟着 serialize 写进 localStorage，也不该在转世时被继承或清空——
+// 玩家上一秒在看哪一页，跟他这具肉身的修为进度没有任何关系。
+let activeTab = DEFAULT_TAB;
+
+function getActiveTab() { return activeTab; }
+
+// 返回是否真的换了页，让调用方决定要不要重绘
+function setActiveTab(id) {
+  if (!TAB_DEFS.some((t) => t.id === id)) return false;
+  if (activeTab === id) return false;
+  activeTab = id;
+  // 换页即回到页首。身世那一页是唯一会滚起来的，滚到底之后切走再切回来，
+  // 不该还停在半空——每次进来看到的都该是同一个开头。
+  $('tab-content').scrollTop = 0;
+  return true;
+}
+
+// 与 renderStances / renderPills 同一条理由：按钮只在集合真的变了时重建（一局至多两次），
+// 之后每帧只切换 active 与提示点。每帧重设 innerHTML 会让手指按住时的高亮被反复打断，
+// 点击也可能落在被替换掉的节点上。
+function renderTabs(state) {
+  const bar = $('tab-bar');
+  const tabs = visibleTabs(state);
+  activeTab = resolveTab(state, activeTab);
+
+  const stamp = tabs.map((t) => t.id).join(',');
+  if (bar.dataset.stamp !== stamp) {
+    bar.dataset.stamp = stamp;
+    // 圆点套在 .tab-label 里而不是按钮里：这样它贴的是那两三个字，
+    // 不随栏宽变化，「修行」与「编年史」上的点位置一致。
+    // 文字拆成单独的 .tab-text：秘境那一格要按帧改字（带不带层号），
+    // 若直接改 .tab-label 的 textContent 会把紧跟着的 .tab-dot 一并冲掉。
+    // .tab-progress 挂在按钮最外层（不是 .tab-label 里）：它要贴住整颗按钮的宽度，
+    // 不能只贴那两三个字。
+    bar.innerHTML = tabs.map((t) => `<button type="button" class="tab-btn" role="tab"
+        data-tab="${t.id}" aria-controls="tab-${t.id}">
+        <span class="tab-label"><span class="tab-text">${t.label}</span><span class="tab-dot" aria-hidden="true"></span></span>
+        <span class="tab-progress" aria-hidden="true"></span>
+      </button>`).join('');
+  }
+
+  for (const btn of bar.children) {
+    const id = btn.dataset.tab;
+    const on = id === activeTab;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', String(on));
+    const alert = tabAlert(state, id);
+    btn.classList.toggle('alert', alert);
+
+    // 秘境这一格的文字与进度随探索现算；其余四格标签固定、进度恒为空——
+    // 与 tabAlert 同一条理由，按 id 现算，不给静态标签另开一条路径。
+    const def = TAB_DEFS.find((t) => t.id === id);
+    const { label, progress } = id === 'secret' ? secretTabState(state) : { label: def.label, progress: null };
+    const text = btn.querySelector('.tab-text');
+    if (text.textContent !== label) text.textContent = label;
+    btn.querySelector('.tab-progress').style.width = progress === null ? '0' : `${progress * 100}%`;
+    // 圆点是纯视觉的（aria-hidden），读屏得从按钮名里听出这件事；层号已经并进了 label，
+    // 读屏使用者听到的「秘境 3」与视觉上看到的是同一句话。
+    btn.setAttribute('aria-label', alert ? `${label}（有待处理）` : label);
+  }
+
+  for (const panel of $('tab-content').children) {
+    panel.hidden = panel.dataset.tab !== activeTab;
+  }
+}
+
 function render(state) {
   const realm = REALMS[state.realm];
   $('dao-hao').textContent = state.daoHao;
@@ -3659,6 +3886,9 @@ function render(state) {
 
   renderOmen(state);
   renderLog(state, $('log-panel'));
+  // 摆在最后：提示点读的是上面刚算过的那两个状态（突破可冲、秘境等决定），
+  // 顺序反了就会慢一帧
+  renderTabs(state);
 }
 
 
@@ -3837,6 +4067,20 @@ function setupBoost() {
   // 转入后台就停。这一条与下面那个存档用的 visibilitychange 是两个监听器，各管一件事；
   // 谁先跑无所谓——serialize 本就把 boosting 归零，存档里不可能留下「正在运功」。
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopBoost(); });
+}
+
+// 切 tab。事件委托挂在容器上而不是按钮上：renderTabs 会在解锁丹房 / 秘境时重建整条。
+//
+// 先停加速是一道保险。按住运功时理论上抬手才点得到 tab（那五条松手路径里的 pointerup
+// 早收住了），但键盘玩家按住空格、再拿鼠标去点 tab 时，keyup 永远不会到——虽然
+// boost-btn 的 blur 也能收住，多这一道无害：stopBoost 是幂等的，没在运功就直接返回。
+// 玩家离开修行页时被四倍烧着寿元，是这个功能唯一的严重故障模式，出口宁可多给一条。
+function onTabClick(e) {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  stopBoost();
+  if (!setActiveTab(btn.dataset.tab)) return;
+  render(game);
 }
 
 // 炼丹。事件委托挂在容器上而不是按钮上：renderPills 会在寿限变动时整体重建按钮。
@@ -4043,6 +4287,7 @@ function boot() {
     pushLog(game, '你自幼被弃于山门之外，十六岁那年，终得引气入体。');
   }
 
+  document.getElementById('tab-bar').addEventListener('click', onTabClick);
   document.getElementById('breakthrough-btn').addEventListener('click', onBreakthrough);
   document.getElementById('stance-bar').addEventListener('click', onStanceClick);
   document.getElementById('pill-rows').addEventListener('click', onPillClick);
